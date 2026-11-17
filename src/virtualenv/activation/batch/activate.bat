@@ -1,3 +1,10 @@
+@REM This file is UTF-8 encoded, so we need to update the current code page while executing it
+@for /f "tokens=2 delims=:." %%a in ('"%SystemRoot%\System32\chcp.com"') do @set _OLD_CODEPAGE=%%a
+
+@if defined _OLD_CODEPAGE (
+    "%SystemRoot%\System32\chcp.com" 65001 > nul
+)
+
 @set "VIRTUAL_ENV=__VIRTUAL_ENV__"
 
 @set "VIRTUAL_ENV_PROMPT=__VIRTUAL_PROMPT__"
@@ -26,6 +33,15 @@
 
 @set PYTHONHOME=
 
+@if defined TCL_LIBRARY @set "_OLD_VIRTUAL_TCL_LIBRARY=%TCL_LIBRARY%"
+@if NOT "__TCL_LIBRARY__"=="" @set "TCL_LIBRARY=__TCL_LIBRARY__"
+
+@if defined TK_LIBRARY @set "_OLD_VIRTUAL_TK_LIBRARY=%TK_LIBRARY%"
+@if NOT "__TK_LIBRARY__"=="" @set "TK_LIBRARY=__TK_LIBRARY__"
+
+@if defined PKG_CONFIG_PATH @set "_OLD_PKG_CONFIG_PATH=%PKG_CONFIG_PATH%"
+@set "PKG_CONFIG_PATH=%VIRTUAL_ENV%\lib\pkgconfig;%PKG_CONFIG_PATH%"
+
 @REM if defined _OLD_VIRTUAL_PATH (
 @if not defined _OLD_VIRTUAL_PATH @goto ENDIFVPATH1
     @set "PATH=%_OLD_VIRTUAL_PATH%"
@@ -36,3 +52,8 @@
 :ENDIFVPATH2
 
 @set "PATH=%VIRTUAL_ENV%\__BIN_NAME__;%PATH%"
+
+@if defined _OLD_CODEPAGE (
+    "%SystemRoot%\System32\chcp.com" %_OLD_CODEPAGE% > nul
+    @set _OLD_CODEPAGE=
+)

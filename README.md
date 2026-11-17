@@ -7,11 +7,11 @@
 [![Discord](https://img.shields.io/discord/803025117553754132)](https://discord.gg/pypa)
 [![Downloads](https://static.pepy.tech/badge/virtualenv/month)](https://pepy.tech/project/virtualenv)
 [![PyPI - License](https://img.shields.io/pypi/l/virtualenv?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Build Status](https://github.com/pypa/virtualenv/workflows/check/badge.svg?branch=main&event=push)](https://github.com/pypa/virtualenv/actions?query=workflow%3Acheck)
+[![check](https://github.com/pypa/virtualenv/actions/workflows/check.yaml/badge.svg)](https://github.com/pypa/virtualenv/actions/workflows/check.yaml)
 
 A tool for creating isolated `virtual` python environments.
 
-- [Installation](https://virtualenv.pypa.io/en/latest/installation.html)
+- [Installation](https://virtualenv.pypa.io/en/latest/how-to/install.html)
 - [Documentation](https://virtualenv.pypa.io)
 - [Changelog](https://virtualenv.pypa.io/en/latest/changelog.html)
 - [Issues](https://github.com/pypa/virtualenv/issues)

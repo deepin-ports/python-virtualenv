@@ -3,7 +3,7 @@ Date: Sat, 21 Mar 2020 03:16:18 -0400
 Subject: Acquire wheels from Debian specific wheels location (from pip
  wheels)
 
-See: https://virtualenv.pypa.io/en/latest/user_guide.html#embed-wheels-for-distributions
+See: https://virtualenv.pypa.io/en/latest/explanation.html#distribution-maintainer-patching
 
 Origin: vendor
 Forwarded: not-needed
@@ -13,15 +13,15 @@ Last-Update: 2020-07-15
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/src/virtualenv/seed/wheels/embed/__init__.py b/src/virtualenv/seed/wheels/embed/__init__.py
-index 04334f9..4227189 100644
+index ac9a85f..1b5e2a2 100644
 --- a/src/virtualenv/seed/wheels/embed/__init__.py
 +++ b/src/virtualenv/seed/wheels/embed/__init__.py
-@@ -4,7 +4,7 @@ from pathlib import Path
- 
+@@ -7,7 +7,7 @@ from pathlib import Path
+ from virtualenv.info import IS_ZIPAPP, ROOT
  from virtualenv.seed.wheels.util import Wheel
  
 -BUNDLE_FOLDER = Path(__file__).absolute().parent
 +BUNDLE_FOLDER = Path('/usr/share/python-wheels')
  BUNDLE_SUPPORT = {
-     "3.7": {
-         "pip": "pip-24.0-py3-none-any.whl",
+     "3.9": {
+         "pip": "pip-26.0.1-py3-none-any.whl",

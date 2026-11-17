@@ -3,17 +3,19 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
+import zipfile
 from stat import S_IWGRP, S_IWOTH, S_IWUSR
 from subprocess import Popen, check_call
 from threading import Thread
 from typing import TYPE_CHECKING
 
 import pytest
+from python_discovery import PythonInfo
+from python_discovery import _cached_py_info as cached_py_info
 
-from virtualenv.discovery import cached_py_info
-from virtualenv.discovery.py_info import PythonInfo
 from virtualenv.info import fs_supports_symlink
 from virtualenv.run import cli_run
+from virtualenv.seed.embed.via_app_data.pip_install.base import _safe_extract_zip
 from virtualenv.seed.wheels.embed import BUNDLE_FOLDER, BUNDLE_SUPPORT
 from virtualenv.util.path import safe_delete
 
@@ -23,9 +25,9 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
-@pytest.mark.slow()
+@pytest.mark.slow
 @pytest.mark.parametrize("copies", [False, True] if fs_supports_symlink() else [True])
-def test_seed_link_via_app_data(tmp_path, coverage_env, current_fastest, copies):
+def test_seed_link_via_app_data(tmp_path, coverage_env, current_fastest, copies) -> None:
     current = PythonInfo.current_system()
     bundle_ver = BUNDLE_SUPPORT[current.version_release_str]
     create_cmd = [
@@ -109,7 +111,7 @@ def test_seed_link_via_app_data(tmp_path, coverage_env, current_fastest, copies)
 
     # Windows does not allow removing a executable while running it, so when uninstalling pip we need to do it via
     # python -m pip
-    remove_cmd = [str(result.creator.exe), "-m", "pip"] + remove_cmd[1:]
+    remove_cmd = [str(result.creator.exe), "-m", "pip", *remove_cmd[1:]]
     process = Popen([*remove_cmd, "pip", "wheel"])
     _, __ = process.communicate()
     assert not process.returncode
@@ -140,23 +142,25 @@ def read_only_dir(d):
                 os.chmod(name, os.stat(name).st_mode | write)
 
 
-@pytest.fixture()
+@pytest.fixture
 def read_only_app_data(temp_app_data):
     temp_app_data.mkdir()
     with read_only_dir(temp_app_data):
         yield temp_app_data
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows only applies R/O to files")
 @pytest.mark.usefixtures("read_only_app_data")
-def test_base_bootstrap_link_via_app_data_not_writable(tmp_path, current_fastest):
+def test_base_bootstrap_link_via_app_data_not_writable(tmp_path, current_fastest) -> None:
     dest = tmp_path / "venv"
     result = cli_run(["--seeder", "app-data", "--creator", current_fastest, "-vv", str(dest)])
     assert result
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows only applies R/O to files")
-def test_populated_read_only_cache_and_symlinked_app_data(tmp_path, current_fastest, temp_app_data):
+def test_populated_read_only_cache_and_symlinked_app_data(tmp_path, current_fastest, temp_app_data) -> None:
     dest = tmp_path / "venv"
     cmd = [
         "--seeder",
@@ -171,7 +175,7 @@ def test_populated_read_only_cache_and_symlinked_app_data(tmp_path, current_fast
     assert cli_run(cmd)
     check_call((str(dest.joinpath("bin/python")), "-c", "import pip"))
 
-    cached_py_info._CACHE.clear()  # necessary to re-trigger py info discovery  # noqa: SLF001
+    cached_py_info._CACHE.clear()  # noqa: SLF001  # necessary to re-trigger py info discovery
     safe_delete(dest)
 
     # should succeed with special flag when read-only
@@ -180,8 +184,9 @@ def test_populated_read_only_cache_and_symlinked_app_data(tmp_path, current_fast
         check_call((str(dest.joinpath("bin/python")), "-c", "import pip"))
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows only applies R/O to files")
-def test_populated_read_only_cache_and_copied_app_data(tmp_path, current_fastest, temp_app_data):
+def test_populated_read_only_cache_and_copied_app_data(tmp_path, current_fastest, temp_app_data) -> None:
     dest = tmp_path / "venv"
     cmd = [
         "--seeder",
@@ -196,7 +201,7 @@ def test_populated_read_only_cache_and_copied_app_data(tmp_path, current_fastest
 
     assert cli_run(cmd)
 
-    cached_py_info._CACHE.clear()  # necessary to re-trigger py info discovery  # noqa: SLF001
+    cached_py_info._CACHE.clear()  # noqa: SLF001  # necessary to re-trigger py info discovery
     safe_delete(dest)
 
     # should succeed with special flag when read-only
@@ -204,19 +209,19 @@ def test_populated_read_only_cache_and_copied_app_data(tmp_path, current_fastest
         assert cli_run(["--read-only-app-data", *cmd])
 
 
-@pytest.mark.slow()
-@pytest.mark.parametrize("pkg", ["pip", "setuptools", "wheel"])
+@pytest.mark.slow
+@pytest.mark.parametrize("pkg", ["pip", "setuptools"])
 @pytest.mark.usefixtures("session_app_data", "current_fastest", "coverage_env")
-def test_base_bootstrap_link_via_app_data_no(tmp_path, pkg):
-    create_cmd = [str(tmp_path), "--seeder", "app-data", f"--no-{pkg}", "--wheel", "bundle", "--setuptools", "bundle"]
+def test_base_bootstrap_link_via_app_data_no(tmp_path, pkg) -> None:
+    create_cmd = [str(tmp_path), "--seeder", "app-data", f"--no-{pkg}", "--setuptools", "bundle"]
     result = cli_run(create_cmd)
     assert not (result.creator.purelib / pkg).exists()
-    for key in {"pip", "setuptools", "wheel"} - {pkg}:
+    for key in {"pip", "setuptools"} - {pkg}:
         assert (result.creator.purelib / key).exists()
 
 
 @pytest.mark.usefixtures("temp_app_data")
-def test_app_data_parallel_ok(tmp_path):
+def test_app_data_parallel_ok(tmp_path) -> None:
     exceptions = _run_parallel_threads(tmp_path)
     assert not exceptions, "\n".join(exceptions)
 
@@ -227,16 +232,17 @@ def test_app_data_parallel_fail(tmp_path: Path, mocker: MockerFixture) -> None:
     exceptions = _run_parallel_threads(tmp_path)
     assert len(exceptions) == 2
     for exception in exceptions:
-        assert exception.startswith("failed to build image wheel because:\nTraceback")
+        assert exception.startswith("failed to build image pip because:\nTraceback")
         assert "RuntimeError" in exception, exception
 
 
 def _run_parallel_threads(tmp_path):
     exceptions = []
 
-    def _run(name):
+    def _run(name) -> None:
         try:
-            cli_run(["--seeder", "app-data", str(tmp_path / name), "--no-pip", "--no-setuptools", "--wheel", "bundle"])
+            cmd = ["--seeder", "app-data", str(tmp_path / name), "--no-setuptools"]
+            cli_run(cmd)
         except Exception as exception:  # noqa: BLE001
             as_str = str(exception)
             exceptions.append(as_str)
@@ -247,3 +253,52 @@ def _run_parallel_threads(tmp_path):
     for thread in threads:
         thread.join()
     return exceptions
+
+
+def _write_zip_with_entry(zip_path: Path, entry_name: str) -> None:
+    with zipfile.ZipFile(str(zip_path), "w") as archive:
+        archive.writestr(entry_name, "payload")
+
+
+def test_safe_extract_zip_allows_normal_entry(tmp_path: Path) -> None:
+    archive = tmp_path / "ok.zip"
+    _write_zip_with_entry(archive, "pkg/inner.txt")
+    target = tmp_path / "out"
+    target.mkdir()
+
+    with zipfile.ZipFile(str(archive)) as zip_ref:
+        _safe_extract_zip(zip_ref, target)
+
+    assert (target / "pkg" / "inner.txt").read_text() == "payload"
+
+
+def test_safe_extract_zip_rejects_parent_traversal(tmp_path: Path) -> None:
+    archive = tmp_path / "evil.zip"
+    _write_zip_with_entry(archive, "../escape.txt")
+    target = tmp_path / "out"
+    target.mkdir()
+
+    with zipfile.ZipFile(str(archive)) as zip_ref, pytest.raises(RuntimeError, match="escaping target directory"):
+        _safe_extract_zip(zip_ref, target)
+
+    assert not (tmp_path / "escape.txt").exists()
+
+
+def test_safe_extract_zip_rejects_absolute_posix_entry(tmp_path: Path) -> None:
+    archive = tmp_path / "abs.zip"
+    _write_zip_with_entry(archive, "/tmp/evil.txt")  # noqa: S108
+    target = tmp_path / "out"
+    target.mkdir()
+
+    with zipfile.ZipFile(str(archive)) as zip_ref, pytest.raises(RuntimeError, match="absolute path"):
+        _safe_extract_zip(zip_ref, target)
+
+
+def test_safe_extract_zip_rejects_absolute_windows_entry(tmp_path: Path) -> None:
+    archive = tmp_path / "win.zip"
+    _write_zip_with_entry(archive, "C:/Windows/System32/evil.txt")
+    target = tmp_path / "out"
+    target.mkdir()
+
+    with zipfile.ZipFile(str(archive)) as zip_ref, pytest.raises(RuntimeError, match="absolute path"):
+        _safe_extract_zip(zip_ref, target)

@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -16,23 +16,24 @@ from virtualenv.seed.wheels.periodic_update import dump_datetime
 from virtualenv.seed.wheels.util import Wheel, discover_wheels
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from unittest.mock import MagicMock
 
     from pytest_mock import MockerFixture
 
 
-@pytest.fixture(autouse=True)
-def _fake_release_date(mocker):
+@pytest.fixture(autouse=True)  # noqa: RUF076
+def _fake_release_date(mocker) -> None:
     mocker.patch("virtualenv.seed.wheels.periodic_update.release_date_for_wheel_path", return_value=None)
 
 
-def test_pip_wheel_env_run_could_not_find(session_app_data, mocker):
+def test_pip_wheel_env_run_could_not_find(session_app_data, mocker) -> None:
     mocker.patch("virtualenv.seed.wheels.acquire.from_bundle", return_value=None)
     with pytest.raises(RuntimeError, match="could not find the embedded pip"):
         pip_wheel_env_run([], session_app_data, os.environ)
 
 
-def test_download_wheel_bad_output(mocker, for_py_version, session_app_data):
+def test_download_wheel_bad_output(mocker, for_py_version, session_app_data) -> None:
     """if the download contains no match for what wheel was downloaded, pick one that matches from target"""
     distribution = "setuptools"
     p_open = mocker.MagicMock()
@@ -57,7 +58,7 @@ def test_download_wheel_bad_output(mocker, for_py_version, session_app_data):
     assert result.path == embed.path
 
 
-def test_download_fails(mocker, for_py_version, session_app_data):
+def test_download_fails(mocker, for_py_version, session_app_data) -> None:
     p_open = mocker.MagicMock()
     mocker.patch("virtualenv.seed.wheels.acquire.Popen", return_value=p_open)
     p_open.communicate.return_value = "out", "err"
@@ -88,14 +89,26 @@ def test_download_fails(mocker, for_py_version, session_app_data):
     ] == exc.cmd
 
 
-@pytest.fixture()
+def test_download_wheel_python_io_encoding(mocker, for_py_version, session_app_data) -> None:
+    mock_popen = mocker.patch("virtualenv.seed.wheels.acquire.Popen")
+    mock_popen.return_value.communicate.return_value = "Saved a-b-c.whl", ""
+    mock_popen.return_value.returncode = 0
+    mocker.patch("pathlib.Path.absolute", return_value=Path("a-b-c.whl"))
+
+    download_wheel("pip", "==1", for_py_version, [], session_app_data, "folder", os.environ.copy())
+
+    env = mock_popen.call_args[1]["env"]
+    assert env["PYTHONIOENCODING"] == "utf-8"
+
+
+@pytest.fixture
 def downloaded_wheel(mocker):
     wheel = Wheel.from_path(Path("setuptools-0.0.0-py2.py3-none-any.whl"))
     return wheel, mocker.patch("virtualenv.seed.wheels.acquire.download_wheel", return_value=wheel)
 
 
 @pytest.mark.parametrize("version", ["bundle", "0.0.0"])
-def test_get_wheel_download_called(mocker, for_py_version, session_app_data, downloaded_wheel, version):
+def test_get_wheel_download_called(mocker, for_py_version, session_app_data, downloaded_wheel, version) -> None:
     distribution = "setuptools"
     write = mocker.patch("virtualenv.app_data.via_disk_folder.JSONStoreDisk.write")
     wheel = get_wheel(distribution, version, for_py_version, [], True, session_app_data, False, os.environ)
@@ -106,7 +119,7 @@ def test_get_wheel_download_called(mocker, for_py_version, session_app_data, dow
 
 
 @pytest.mark.parametrize("version", ["embed", "pinned"])
-def test_get_wheel_download_not_called(mocker, for_py_version, session_app_data, downloaded_wheel, version):
+def test_get_wheel_download_not_called(mocker, for_py_version, session_app_data, downloaded_wheel, version) -> None:
     distribution = "setuptools"
     expected = get_embed_wheel(distribution, for_py_version)
     if version == "pinned":
@@ -158,3 +171,36 @@ def test_get_wheel_download_cached(
             },
         ],
     }
+
+
+@pytest.mark.parametrize(
+    "distribution",
+    [
+        "pip space",
+        "pip[extra]",
+        "pip;os.system('x')",
+        "--index-url=http://evil",
+        "-r requirements.txt",
+        "",
+        ".pip",
+        "pip-",
+    ],
+)
+def test_download_wheel_rejects_bad_distribution(distribution: str, session_app_data) -> None:
+    with pytest.raises(ValueError, match="suspicious distribution name"):
+        download_wheel(distribution, None, "3.14", [], session_app_data, "folder", os.environ)
+
+
+@pytest.mark.parametrize(
+    "version_spec",
+    [
+        "==1.0 --index-url=http://evil",
+        ">=1.0",
+        "== 1.0",
+        "==1.0;echo",
+    ],
+)
+def test_download_wheel_rejects_bad_version_spec(version_spec: str, session_app_data, mocker: MockerFixture) -> None:
+    mocker.patch("virtualenv.seed.wheels.acquire.Popen")
+    with pytest.raises(ValueError, match="suspicious version spec"):
+        download_wheel("pip", version_spec, "3.14", [], session_app_data, "folder", os.environ)

@@ -6,7 +6,6 @@ import subprocess
 import sys
 from os.path import dirname, normcase
 from pathlib import Path
-from shlex import quote
 from subprocess import Popen
 
 import pytest
@@ -15,7 +14,7 @@ from virtualenv.run import cli_run
 
 
 class ActivationTester:
-    def __init__(self, of_class, session, cmd, activate_script, extension) -> None:  # noqa: PLR0913
+    def __init__(self, of_class, session, cmd, activate_script, extension) -> None:
         self.of_class = of_class
         self._creator = session.creator
         self._version_cmd = [cmd, "--version"]
@@ -35,19 +34,20 @@ class ActivationTester:
             try:
                 process = Popen(
                     self._version_cmd,
+                    stdin=subprocess.DEVNULL,
                     universal_newlines=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     encoding="utf-8",
                 )
-                out, err = process.communicate()
-            except Exception as exception:  # noqa: BLE001
+                out, err = process.communicate(timeout=30)
+            except Exception as exception:
                 self._version = exception
                 if raise_on_fail:
                     raise
                 return RuntimeError(f"{self} is not available due {exception}")
             else:
-                result = out if out else err
+                result = out or err
                 self._version = result
                 return result
         return self._version
@@ -76,13 +76,22 @@ class ActivationTester:
         invoke, env = [*self._invoke_script, str(test_script)], self.env(tmp_path)
 
         try:
-            process = Popen(invoke, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-            raw_, _ = process.communicate()
-            raw = raw_.decode()
+            process = Popen(invoke, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+            raw_, _ = process.communicate(timeout=60)
+        except subprocess.TimeoutExpired as exc:
+            process.kill()
+            remaining, _ = process.communicate(timeout=5)
+            partial = (exc.stdout or b"") + (remaining or b"")
+            pytest.fail(
+                f"Activation script timed out:\nPartial output:\n{partial.decode(errors='replace')}\nCommand: {invoke}"
+            )
         except subprocess.CalledProcessError as exception:
             output = exception.output + exception.stderr
             assert not exception.returncode, output  # noqa: PT017
             return None
+        else:
+            raw = raw_.decode(errors="replace")
+            assert process.returncode == 0, raw
 
         out = re.sub(r"pydev debugger: process \d+ is connecting\n\n", "", raw, flags=re.MULTILINE).strip().splitlines()
         self.assert_output(out, raw, tmp_path)
@@ -98,7 +107,7 @@ class ActivationTester:
         env["PYTHONIOENCODING"] = "utf-8"
         env["PATH"] = os.pathsep.join([dirname(sys.executable), *env.get("PATH", "").split(os.pathsep)])
         # clear up some environment variables so they don't affect the tests
-        for key in [k for k in env if k.startswith(("_OLD", "VIRTUALENV_"))]:
+        for key in [k for k in env if k.startswith(("_OLD", "VIRTUALENV_", "COVERAGE_"))]:
             del env[key]
         return env
 
@@ -111,7 +120,7 @@ class ActivationTester:
         return test_script
 
     def _get_test_lines(self, activate_script):
-        return [
+        steps = [
             self.print_python_exe(),
             self.print_os_env_var("VIRTUAL_ENV"),
             self.print_os_env_var("VIRTUAL_ENV_PROMPT"),
@@ -128,15 +137,23 @@ class ActivationTester:
             self.print_os_env_var("VIRTUAL_ENV_PROMPT"),
             "",  # just finish with an empty new line
         ]
+        result = []
+        for index, step in enumerate(steps):
+            result.extend((self.print_marker(index), step))
+        return result
 
-    def assert_output(self, out, raw, tmp_path):
-        # pre-activation
+    def print_marker(self, step) -> str:
+        return f'echo "__STEP_{step}__"'
+
+    def assert_output(self, out, raw, tmp_path) -> None:
+        """Compare _get_test_lines() with the expected values."""
+        out = [line for line in out if not line.strip('"').startswith("__STEP_")]
         assert out[0], raw
         assert out[1] == "None", raw
         assert out[2] == "None", raw
-        # post-activation
-        expected = self._creator.exe.parent / os.path.basename(sys.executable)
-        assert self.norm_path(out[3]) == self.norm_path(expected), raw
+        # self.activate_call(activate_script) runs at this point
+        python_exe = self._creator.exe.parent / os.path.basename(sys.executable)
+        assert self.norm_path(out[3]) == self.norm_path(python_exe), raw
         assert self.norm_path(out[4]) == self.norm_path(self._creator.dest).replace("\\\\", "\\"), raw
         assert out[5] == self._creator.env_name
         # Some attempts to test the prompt output print more than 1 line.
@@ -153,9 +170,9 @@ class ActivationTester:
         assert out[-1] == "None", raw
 
     def quote(self, s):
-        return quote(s)
+        return self.of_class.quote(s)
 
-    def python_cmd(self, cmd):
+    def python_cmd(self, cmd) -> str:
         return f"{os.path.basename(sys.executable)} -c {self.quote(cmd)}"
 
     def print_python_exe(self):
@@ -208,12 +225,13 @@ class RaiseOnNonSourceCall(ActivationTester):
         env, activate_script = super().__call__(monkeypatch, tmp_path)
         process = Popen(
             self.non_source_activate(activate_script),
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
         )
-        _out, _err = process.communicate()
-        err = _err.decode("utf-8")
+        _out, err_ = process.communicate(timeout=60)
+        err = err_.decode("utf-8")
         assert process.returncode
         assert self.non_source_fail_message in err
 
@@ -232,6 +250,7 @@ def raise_on_non_source_class():
 def activation_python(request, tmp_path_factory, special_char_name, current_fastest):
     dest = os.path.join(str(tmp_path_factory.mktemp("activation-tester-env")), special_char_name)
     cmd = ["--without-pip", dest, "--creator", current_fastest, "-vv", "--no-periodic-update"]
+    # `params` is accessed here. https://docs.pytest.org/en/stable/reference/reference.html#pytest-fixture
     if request.param:
         cmd += ["--prompt", special_char_name]
     session = cli_run(cmd)
@@ -240,7 +259,7 @@ def activation_python(request, tmp_path_factory, special_char_name, current_fast
     return session
 
 
-@pytest.fixture()
+@pytest.fixture
 def activation_tester(activation_python, monkeypatch, tmp_path, is_inside_ci):
     def _tester(tester_class):
         tester = tester_class(activation_python)
