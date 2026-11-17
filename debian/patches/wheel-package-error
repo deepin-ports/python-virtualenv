@@ -8,13 +8,13 @@ Forwarded: not-needed
  1 file changed, 14 insertions(+)
 
 diff --git a/src/virtualenv/seed/wheels/embed/__init__.py b/src/virtualenv/seed/wheels/embed/__init__.py
-index 77d16e7..5eed57e 100644
+index c38be94..10102cd 100644
 --- a/src/virtualenv/seed/wheels/embed/__init__.py
 +++ b/src/virtualenv/seed/wheels/embed/__init__.py
-@@ -77,6 +77,20 @@ def get_embed_wheel(distribution: str, for_py_version: str | None) -> Wheel | No
-     :raises RuntimeError: if the bundled wheel on disk fails SHA-256 verification.
+@@ -65,6 +65,20 @@ BUNDLE_SUPPORT = list_available_wheels(BUNDLE_SUPPORT.keys())
  
-     """
+ 
+ def get_embed_wheel(distribution, for_py_version):
 +    # Debian specific: Point at the appropriate wheel package
 +    wheel = BUNDLE_SUPPORT.get(for_py_version, {}).get(distribution)
 +    if wheel is None:
@@ -29,6 +29,6 @@ index 77d16e7..5eed57e 100644
 +            ))
 +    # End Debian specific
 +
-     if for_py_version is None or _release_tuple(for_py_version) > _release_tuple(MAX):
-         # no specific target, or a Python newer than anything bundled: reuse the newest bundle
-         mapping = BUNDLE_SUPPORT[MAX]
+     mapping = BUNDLE_SUPPORT.get(for_py_version, {}) or BUNDLE_SUPPORT[MAX]
+     wheel_file = mapping.get(distribution)
+     if wheel_file is None:

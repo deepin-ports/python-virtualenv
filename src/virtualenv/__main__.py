@@ -5,20 +5,11 @@ import logging
 import os
 import sys
 from timeit import default_timer
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-
-    from virtualenv.config.cli.parser import VirtualEnvOptions
-    from virtualenv.run.session import Session
 
 LOGGER = logging.getLogger(__name__)
 
 
-def run(
-    args: list[str] | None = None, options: VirtualEnvOptions | None = None, env: MutableMapping[str, str] | None = None
-) -> None:
+def run(args=None, options=None, env=None):
     env = os.environ if env is None else env
     start = default_timer()
     from virtualenv.run import cli_run  # noqa: PLC0415
@@ -46,7 +37,7 @@ def run(
 
 
 class LogSession:
-    def __init__(self, session: Session, start: float) -> None:
+    def __init__(self, session, start) -> None:
         self.session = session
         self.start = start
 
@@ -68,7 +59,7 @@ class LogSession:
         return "\n".join(lines)
 
 
-def run_with_catch(args: list[str] | None = None, env: MutableMapping[str, str] | None = None) -> None:
+def run_with_catch(args=None, env=None):
     from virtualenv.config.cli.parser import VirtualEnvOptions  # noqa: PLC0415
 
     env = os.environ if env is None else env
@@ -77,18 +68,15 @@ def run_with_catch(args: list[str] | None = None, env: MutableMapping[str, str] 
         run(args, options, env)
     except (KeyboardInterrupt, SystemExit, Exception) as exception:  # noqa: BLE001
         try:
-            _exit_for_exception(options, exception)
+            if getattr(options, "with_traceback", False):
+                raise
+            if not (isinstance(exception, SystemExit) and exception.code == 0):
+                LOGGER.error("%s: %s", type(exception).__name__, exception)  # noqa: TRY400
+            code = exception.code if isinstance(exception, SystemExit) else 1
+            sys.exit(code)
         finally:
             for handler in LOGGER.handlers:  # force flush of log messages before the trace is printed
                 handler.flush()
-
-
-def _exit_for_exception(options: VirtualEnvOptions, exception: BaseException) -> None:
-    if getattr(options, "with_traceback", False):
-        raise exception
-    if not (isinstance(exception, SystemExit) and exception.code == 0):
-        LOGGER.error("%s: %s", type(exception).__name__, exception)
-    sys.exit(exception.code if isinstance(exception, SystemExit) else 1)
 
 
 if __name__ == "__main__":  # pragma: no cov

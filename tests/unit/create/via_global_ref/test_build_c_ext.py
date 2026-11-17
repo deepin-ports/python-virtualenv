@@ -7,17 +7,16 @@ from pathlib import Path
 from subprocess import Popen
 
 import pytest
-from python_discovery import PythonInfo
 
+from virtualenv.discovery.py_info import PythonInfo
 from virtualenv.run import cli_run
-from virtualenv.run.plugin.creators import CreatorSelector
 from virtualenv.seed.wheels.embed import BUNDLE_FOLDER as EMBED_WHEEL_DIR
 
 CURRENT = PythonInfo.current_system()
-CREATOR_CLASSES = CreatorSelector.for_interpreter(CURRENT).key_to_class
+CREATOR_CLASSES = CURRENT.creators().key_to_class
 
 
-def builtin_shows_marker_missing() -> bool:
+def builtin_shows_marker_missing():
     builtin_classs = CREATOR_CLASSES.get("builtin")
     if builtin_classs is None:
         return False
@@ -39,7 +38,7 @@ def builtin_shows_marker_missing() -> bool:
     reason="Building C-Extensions requires header files with host python",
 )
 @pytest.mark.parametrize("creator", [i for i in CREATOR_CLASSES if i != "builtin"])
-def test_can_build_c_extensions(creator, tmp_path, coverage_env) -> None:
+def test_can_build_c_extensions(creator, tmp_path, coverage_env):
     env, greet = tmp_path / "env", str(tmp_path / "greet")
     shutil.copytree(str(Path(__file__).parent.resolve() / "greet"), greet)
     session = cli_run(["--creator", creator, "--seeder", "app-data", str(env), "-vvv"])

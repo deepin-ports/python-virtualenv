@@ -3,35 +3,21 @@
 from __future__ import annotations
 
 import os
-import sys
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from stat import S_IXGRP, S_IXOTH, S_IXUSR
-from typing import TYPE_CHECKING
 
 from virtualenv.info import fs_is_case_sensitive, fs_supports_symlink
 from virtualenv.util.path import copy, make_exe, symlink
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
 
-if sys.version_info >= (3, 11):  # pragma: no cover (py311+)
-    from enum import StrEnum
-else:  # pragma: no cover (py311+)
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
-
-
-class RefMust(StrEnum):
+class RefMust:
     NA = "NA"
     COPY = "copy"
     SYMLINK = "symlink"
 
 
-class RefWhen(StrEnum):
+class RefWhen:
     ANY = "ANY"
     COPY = "copy"
     SYMLINK = "symlink"
@@ -43,7 +29,7 @@ class PathRef(ABC):
     FS_SUPPORTS_SYMLINK = fs_supports_symlink()
     FS_CASE_SENSITIVE = fs_is_case_sensitive()
 
-    def __init__(self, src: Path, must: str = RefMust.NA, when: str = RefWhen.ANY) -> None:
+    def __init__(self, src, must=RefMust.NA, when=RefWhen.ANY) -> None:
         self.must = must
         self.when = when
         self.src = src
@@ -51,15 +37,15 @@ class PathRef(ABC):
             self.exists = src.exists()
         except OSError:
             self.exists = False
-        self._can_read: bool | None = None if self.exists else False
-        self._can_copy: bool | None = None if self.exists else False
-        self._can_symlink: bool | None = None if self.exists else False
+        self._can_read = None if self.exists else False
+        self._can_copy = None if self.exists else False
+        self._can_symlink = None if self.exists else False
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(src={self.src})"
 
     @property
-    def can_read(self) -> bool:
+    def can_read(self):
         if self._can_read is None:
             if self.src.is_file():
                 try:
@@ -72,7 +58,7 @@ class PathRef(ABC):
         return self._can_read
 
     @property
-    def can_copy(self) -> bool:
+    def can_copy(self):
         if self._can_copy is None:
             if self.must == RefMust.SYMLINK:
                 self._can_copy = self.can_symlink
@@ -81,7 +67,7 @@ class PathRef(ABC):
         return self._can_copy
 
     @property
-    def can_symlink(self) -> bool:
+    def can_symlink(self):
         if self._can_symlink is None:
             if self.must == RefMust.COPY:
                 self._can_symlink = self.can_copy
@@ -90,10 +76,10 @@ class PathRef(ABC):
         return self._can_symlink
 
     @abstractmethod
-    def run(self, creator: object, symlinks: bool) -> None:
+    def run(self, creator, symlinks):
         raise NotImplementedError
 
-    def method(self, symlinks: bool) -> Callable[..., None]:
+    def method(self, symlinks):
         if self.must == RefMust.SYMLINK:
             return symlink
         if self.must == RefMust.COPY:
@@ -104,18 +90,18 @@ class PathRef(ABC):
 class ExePathRef(PathRef, ABC):
     """Base class that checks if a executable can be references via symlink/copy."""
 
-    def __init__(self, src: Path, must: str = RefMust.NA, when: str = RefWhen.ANY) -> None:
+    def __init__(self, src, must=RefMust.NA, when=RefWhen.ANY) -> None:
         super().__init__(src, must, when)
-        self._can_run: bool | None = None
+        self._can_run = None
 
     @property
-    def can_symlink(self) -> bool:
+    def can_symlink(self):
         if self.FS_SUPPORTS_SYMLINK:
             return self.can_run
         return False
 
     @property
-    def can_run(self) -> bool:
+    def can_run(self):
         if self._can_run is None:
             mode = self.src.stat().st_mode
             for key in [S_IXUSR, S_IXGRP, S_IXOTH]:
@@ -124,17 +110,17 @@ class ExePathRef(PathRef, ABC):
                 break
             else:
                 self._can_run = False
-        return self._can_run  # ty: ignore[invalid-return-type]
+        return self._can_run
 
 
 class PathRefToDest(PathRef):
     """Link a path on the file system."""
 
-    def __init__(self, src: Path, dest: Callable[..., Path], must: str = RefMust.NA, when: str = RefWhen.ANY) -> None:
+    def __init__(self, src, dest, must=RefMust.NA, when=RefWhen.ANY) -> None:
         super().__init__(src, must, when)
         self.dest = dest
 
-    def run(self, creator: object, symlinks: bool) -> None:
+    def run(self, creator, symlinks):
         dest = self.dest(creator, self.src)
         method = self.method(symlinks)
         dest_iterable = dest if isinstance(dest, list) else (dest,)
@@ -147,9 +133,7 @@ class PathRefToDest(PathRef):
 class ExePathRefToDest(PathRefToDest, ExePathRef):
     """Link a exe path on the file system."""
 
-    def __init__(
-        self, src: Path, targets: list[str], dest: Callable[..., Path], must: str = RefMust.NA, when: str = RefWhen.ANY
-    ) -> None:
+    def __init__(self, src, targets, dest, must=RefMust.NA, when=RefWhen.ANY) -> None:
         ExePathRef.__init__(self, src, must, when)
         PathRefToDest.__init__(self, src, dest, must, when)
         if not self.FS_CASE_SENSITIVE:
@@ -158,7 +142,7 @@ class ExePathRefToDest(PathRefToDest, ExePathRef):
         self.aliases = targets[1:]
         self.dest = dest
 
-    def run(self, creator: object, symlinks: bool) -> None:
+    def run(self, creator, symlinks):
         bin_dir = self.dest(creator, self.src).parent
         dest = bin_dir / self.base
         method = self.method(symlinks)

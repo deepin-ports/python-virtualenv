@@ -12,15 +12,14 @@ Build-Depends: debhelper-compat (= 13),
                python3-all,
                unzip <!nocheck>,
                zip <!nocheck>,
-Build-Depends-Indep: python3-discovery <!nocheck>,
-                     python3-distlib (>= 0.3.1) <!nocheck>,
+Build-Depends-Indep: python3-distlib (>= 0.3.1) <!nocheck>,
                      python3-filelock <!nocheck>,
                      python3-pip-whl <!nocheck>,
                      python3-platformdirs <!nocheck>,
                      python3-hatchling (>= 1.11.1),
                      python3-hatch-vcs (>= 0.3),
                      python3-setuptools-whl <!nocheck>,
-Standards-Version: 4.7.4
+Standards-Version: 4.7.3
 
 Package: python3-virtualenv
 Architecture: all

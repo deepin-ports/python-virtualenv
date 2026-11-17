@@ -21,21 +21,21 @@ from textwrap import dedent
 from threading import Thread
 
 import pytest
-from python_discovery import PythonInfo
 
 from virtualenv.__main__ import run, run_with_catch
 from virtualenv.create.creator import DEBUG_SCRIPT, Creator, get_env_debug_info
 from virtualenv.create.pyenv_cfg import PyEnvCfg
 from virtualenv.create.via_global_ref import api
 from virtualenv.create.via_global_ref.builtin.cpython.common import is_mac_os_framework, is_macos_brew
+from virtualenv.create.via_global_ref.builtin.cpython.cpython3 import CPython3Posix
+from virtualenv.discovery.py_info import PythonInfo
 from virtualenv.info import IS_PYPY, IS_WIN, fs_is_case_sensitive
 from virtualenv.run import cli_run, session_via_cli
-from virtualenv.run.plugin.creators import CreatorSelector
 
 CURRENT = PythonInfo.current_system()
 
 
-def test_os_path_sep_not_allowed(tmp_path, capsys) -> None:
+def test_os_path_sep_not_allowed(tmp_path, capsys):
     target = str(tmp_path / f"a{os.pathsep}b")
     err = _non_success_exit_code(capsys, target)
     msg = (
@@ -54,7 +54,7 @@ def _non_success_exit_code(capsys, target):
     return err
 
 
-def test_destination_exists_file(tmp_path, capsys) -> None:
+def test_destination_exists_file(tmp_path, capsys):
     target = tmp_path / "out"
     target.write_text("", encoding="utf-8")
     err = _non_success_exit_code(capsys, str(target))
@@ -63,7 +63,7 @@ def test_destination_exists_file(tmp_path, capsys) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows only applies R/O to files")
-def test_destination_not_write_able(tmp_path, capsys) -> None:
+def test_destination_not_write_able(tmp_path, capsys):
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         pytest.skip("no way to check permission restriction when running under root")
 
@@ -93,9 +93,9 @@ def system(session_app_data):
     return get_env_debug_info(Path(CURRENT.system_executable), DEBUG_SCRIPT, session_app_data, os.environ)
 
 
-CURRENT_CREATORS = [i for i in CreatorSelector.for_interpreter(CURRENT).key_to_class if i != "builtin"]
+CURRENT_CREATORS = [i for i in CURRENT.creators().key_to_class if i != "builtin"]
 CREATE_METHODS = []
-for k, v in CreatorSelector.for_interpreter(CURRENT).key_to_meta.items():
+for k, v in CURRENT.creators().key_to_meta.items():
     if k in CURRENT_CREATORS:
         if v.can_copy:
             if k == "venv" and CURRENT.implementation == "PyPy" and CURRENT.pypy_version_info >= [7, 3, 13]:
@@ -117,7 +117,7 @@ def test_create_no_seed(  # noqa: C901, PLR0912, PLR0913, PLR0915
     system,
     coverage_env,
     special_name_dir,
-) -> None:
+):
     dest = special_name_dir
     creator_key, method = creator
     cmd = [
@@ -211,11 +211,22 @@ def test_create_no_seed(  # noqa: C901, PLR0912, PLR0913, PLR0915
         assert python_w.exists()
         assert python_w.read_bytes() != creator.exe.read_bytes()
 
+    if CPython3Posix.pyvenv_launch_patch_active(PythonInfo.from_exe(python)) and creator_key != "venv":
+        result = subprocess.check_output(
+            [str(creator.exe), "-c", 'import os; print(os.environ.get("__PYVENV_LAUNCHER__"))'],
+            text=True,
+        ).strip()
+        assert result == "None"
+
     git_ignore = (dest / ".gitignore").read_text(encoding="utf-8")
-    assert git_ignore.splitlines() == ["# created by virtualenv automatically", "*"]
+    if creator_key == "venv" and sys.version_info >= (3, 13):
+        comment = "# Created by venv; see https://docs.python.org/3/library/venv.html"
+    else:
+        comment = "# created by virtualenv automatically"
+    assert git_ignore.splitlines() == [comment, "*"]
 
 
-def test_create_cachedir_tag(tmp_path) -> None:
+def test_create_cachedir_tag(tmp_path):
     cachedir_tag_file = tmp_path / "CACHEDIR.TAG"
     cli_run([str(tmp_path), "--without-pip", "--activators", ""])
 
@@ -242,20 +253,20 @@ def test_create_cachedir_tag_exists_override(tmp_path: Path) -> None:
     assert cachedir_tag_file.read_text(encoding="utf-8") == "magic"
 
 
-def test_create_vcs_ignore_exists(tmp_path) -> None:
+def test_create_vcs_ignore_exists(tmp_path):
     git_ignore = tmp_path / ".gitignore"
     git_ignore.write_text("magic", encoding="utf-8")
     cli_run([str(tmp_path), "--without-pip", "--activators", ""])
     assert git_ignore.read_text(encoding="utf-8") == "magic"
 
 
-def test_create_vcs_ignore_override(tmp_path) -> None:
+def test_create_vcs_ignore_override(tmp_path):
     git_ignore = tmp_path / ".gitignore"
     cli_run([str(tmp_path), "--without-pip", "--no-vcs-ignore", "--activators", ""])
     assert not git_ignore.exists()
 
 
-def test_create_vcs_ignore_exists_override(tmp_path) -> None:
+def test_create_vcs_ignore_exists_override(tmp_path):
     git_ignore = tmp_path / ".gitignore"
     git_ignore.write_text("magic", encoding="utf-8")
     cli_run([str(tmp_path), "--without-pip", "--no-vcs-ignore", "--activators", ""])
@@ -263,7 +274,7 @@ def test_create_vcs_ignore_exists_override(tmp_path) -> None:
 
 
 @pytest.mark.skipif(not CURRENT.has_venv, reason="requires interpreter with venv")
-def test_venv_fails_not_inline(tmp_path, capsys, mocker) -> None:
+def test_venv_fails_not_inline(tmp_path, capsys, mocker):
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         pytest.skip("no way to check permission restriction when running under root")
 
@@ -292,7 +303,7 @@ def test_venv_fails_not_inline(tmp_path, capsys, mocker) -> None:
 
 @pytest.mark.parametrize("creator", CURRENT_CREATORS)
 @pytest.mark.parametrize("clear", [True, False], ids=["clear", "no_clear"])
-def test_create_clear_resets(tmp_path, creator, clear, caplog) -> None:
+def test_create_clear_resets(tmp_path, creator, clear, caplog):
     caplog.set_level(logging.DEBUG)
     if creator == "venv" and clear is False:
         pytest.skip("venv without clear might fail")
@@ -356,7 +367,7 @@ def test_include_dir_created(tmp_path: Path, creator: str) -> None:
 
 
 @pytest.mark.parametrize("creator", CURRENT_CREATORS)
-def test_home_path_is_exe_parent(tmp_path, creator) -> None:
+def test_home_path_is_exe_parent(tmp_path, creator):
     cmd = [str(tmp_path), "--seeder", "app-data", "--without-pip", "--creator", creator]
 
     result = cli_run(cmd)
@@ -377,31 +388,9 @@ def test_home_path_is_exe_parent(tmp_path, creator) -> None:
     assert any(os.path.exists(os.path.join(cfg["home"], exe)) for exe in exes)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX only")
-@pytest.mark.skipif(
-    bool(CURRENT.sysconfig_vars.get("PYTHONFRAMEWORK")),
-    reason="framework builds self-locate via dyld and keep the recorded path",
-)
 @pytest.mark.usefixtures("temp_app_data")
-def test_home_resolves_executable_only_symlink(tmp_path: Path) -> None:
-    """An executable-only symlink must not be recorded as home / base-executable (issue #3157)."""
-    system_exe = CURRENT.system_executable
-    assert system_exe is not None
-    link = tmp_path / "symdir" / "python3"
-    link.parent.mkdir()
-    link.symlink_to(system_exe)
-
-    result = cli_run(["-p", str(link), str(tmp_path / "env"), "--seeder", "app-data", "--without-pip"])
-    cfg = PyEnvCfg.from_file(result.creator.pyenv_cfg.path)
-
-    assert Path(cfg["home"]) != link.parent
-    assert os.path.samefile(cfg["base-executable"], system_exe)
-    assert Path(cfg["home"]) == Path(cfg["base-executable"]).parent
-
-
-@pytest.mark.usefixtures("temp_app_data")
-def test_create_parallel(tmp_path) -> None:
-    def create(count) -> None:
+def test_create_parallel(tmp_path):
+    def create(count):
         subprocess.check_call(
             [sys.executable, "-m", "virtualenv", "-vvv", str(tmp_path / f"venv{count}"), "--without-pip"],
         )
@@ -413,21 +402,21 @@ def test_create_parallel(tmp_path) -> None:
         thread.join()
 
 
-def test_creator_input_passed_is_abs(tmp_path, monkeypatch) -> None:
+def test_creator_input_passed_is_abs(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = Creator.validate_dest("venv")
     assert str(result) == str(tmp_path / "venv")
 
 
 @pytest.mark.skipif(os.altsep is None, reason="OS does not have an altsep")
-def test_creator_replaces_altsep_in_dest(tmp_path) -> None:
+def test_creator_replaces_altsep_in_dest(tmp_path):
     dest = str(tmp_path / "venv{}foobar")
     result = Creator.validate_dest(dest.format(os.altsep))
     assert str(result) == dest.format(os.sep)
 
 
 @pytest.mark.usefixtures("current_fastest")
-def test_create_long_path(tmp_path) -> None:
+def test_create_long_path(tmp_path):
     if sys.platform == "darwin":
         max_shebang_length = 512
     else:
@@ -443,11 +432,9 @@ def test_create_long_path(tmp_path) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(
-    "creator", sorted(set(CreatorSelector.for_interpreter(PythonInfo.current_system()).key_to_class) - {"builtin"})
-)
+@pytest.mark.parametrize("creator", sorted(set(PythonInfo.current_system().creators().key_to_class) - {"builtin"}))
 @pytest.mark.usefixtures("session_app_data")
-def test_create_distutils_cfg(creator, tmp_path, monkeypatch) -> None:
+def test_create_distutils_cfg(creator, tmp_path, monkeypatch):
     result = cli_run(
         [
             str(tmp_path / "venv"),
@@ -510,7 +497,7 @@ def list_files(path):
 
 @pytest.mark.skipif(is_macos_brew(CURRENT), reason="no copy on brew")
 @pytest.mark.skip(reason="https://github.com/pypa/setuptools/issues/4640")
-def test_zip_importer_can_import_setuptools(tmp_path) -> None:
+def test_zip_importer_can_import_setuptools(tmp_path):
     """We're patching the loaders so might fail on r/o loaders, such as zipimporter on CPython<3.8"""
     result = cli_run(
         [str(tmp_path / "venv"), "--activators", "", "--no-pip", "--no-wheel", "--copies", "--setuptools", "bundle"],
@@ -543,7 +530,7 @@ def test_zip_importer_can_import_setuptools(tmp_path) -> None:
     reason="https://foss.heptapod.net/pypy/pypy/-/issues/3269",
 )
 @pytest.mark.usefixtures("_no_coverage")
-def test_no_preimport_threading(tmp_path) -> None:
+def test_no_preimport_threading(tmp_path):
     session = cli_run([str(tmp_path)])
     out = subprocess.check_output(
         [str(session.creator.exe), "-c", r"import sys; print('\n'.join(sorted(sys.modules)))"],
@@ -555,7 +542,7 @@ def test_no_preimport_threading(tmp_path) -> None:
 
 
 # verify that .pth files in site-packages/ are always processed even if $PYTHONPATH points to it.
-def test_pth_in_site_vs_python_path(tmp_path) -> None:
+def test_pth_in_site_vs_python_path(tmp_path):
     session = cli_run([str(tmp_path)])
     site_packages = session.creator.purelib
     # install test.pth that sets sys.testpth='ok'
@@ -582,7 +569,7 @@ def test_pth_in_site_vs_python_path(tmp_path) -> None:
     assert out == "ok\n"
 
 
-def test_getsitepackages_system_site(tmp_path) -> None:
+def test_getsitepackages_system_site(tmp_path):
     # Test without --system-site-packages
     session = cli_run([str(tmp_path)])
 
@@ -625,7 +612,7 @@ def get_expected_system_site_packages(session):
     return system_site_packages
 
 
-def test_get_site_packages(tmp_path) -> None:
+def test_get_site_packages(tmp_path):
     case_sensitive = fs_is_case_sensitive()
     session = cli_run([str(tmp_path)])
     env_site_packages = [str(session.creator.purelib), str(session.creator.platlib)]
@@ -644,7 +631,7 @@ def test_get_site_packages(tmp_path) -> None:
         assert env_site_package in site_packages
 
 
-def test_debug_bad_virtualenv(tmp_path) -> None:
+def test_debug_bad_virtualenv(tmp_path):
     cmd = [str(tmp_path), "--without-pip"]
     result = cli_run(cmd)
     # if the site.py is removed/altered the debug should fail as no one is around to fix the paths
@@ -662,7 +649,7 @@ def test_debug_bad_virtualenv(tmp_path) -> None:
 
 @pytest.mark.graalpy
 @pytest.mark.parametrize("python_path_on", [True, False], ids=["on", "off"])
-def test_python_path(monkeypatch, tmp_path, python_path_on) -> None:
+def test_python_path(monkeypatch, tmp_path, python_path_on):
     result = cli_run([str(tmp_path), "--without-pip", "--activators", ""])
     monkeypatch.chdir(tmp_path)
     case_sensitive = fs_is_case_sensitive()
@@ -721,12 +708,12 @@ def test_python_path(monkeypatch, tmp_path, python_path_on) -> None:
 #
 # https://github.com/pypa/virtualenv/issues/2419
 @pytest.mark.skipif("venv" not in CURRENT_CREATORS, reason="test needs venv creator")
-def test_venv_creator_without_write_perms(tmp_path, mocker) -> None:
+def test_venv_creator_without_write_perms(tmp_path, mocker):
     from virtualenv.run.session import Session  # noqa: PLC0415
 
     prev = Session._create  # noqa: SLF001
 
-    def func(self) -> None:
+    def func(self):
         prev(self)
         scripts_dir = self.creator.dest / "bin"
         for script in scripts_dir.glob("*ctivate*"):
@@ -738,7 +725,7 @@ def test_venv_creator_without_write_perms(tmp_path, mocker) -> None:
     cli_run(cmd)
 
 
-def test_fallback_to_copies_if_symlink_unsupported(tmp_path, python, mocker) -> None:
+def test_fallback_to_copies_if_symlink_unsupported(tmp_path, python, mocker):
     """Test that creating a virtual environment falls back to copies when filesystem has no symlink support."""
     if is_macos_brew(PythonInfo.from_exe(python)):
         pytest.skip("brew python on darwin may not support copies, which is tested separately")
@@ -763,7 +750,7 @@ def test_fallback_to_copies_if_symlink_unsupported(tmp_path, python, mocker) -> 
     assert result.creator.symlinks is False
 
 
-def test_fail_gracefully_if_no_method_supported(tmp_path, python, mocker) -> None:
+def test_fail_gracefully_if_no_method_supported(tmp_path, python, mocker):
     """Test that virtualenv fails gracefully when no creation method is supported."""
     # Given a filesystem that does not support symlinks
     mocker.patch("virtualenv.create.via_global_ref.api.fs_supports_symlink", return_value=False)
@@ -772,7 +759,7 @@ def test_fail_gracefully_if_no_method_supported(tmp_path, python, mocker) -> Non
     if not is_macos_brew(PythonInfo.from_exe(python)):
         original_init = api.ViaGlobalRefMeta.__init__
 
-        def new_init(self, *args, **kwargs) -> None:
+        def new_init(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
             self.copy_error = "copying is not supported"
 
@@ -801,7 +788,7 @@ def test_fail_gracefully_if_no_method_supported(tmp_path, python, mocker) -> Non
         assert "copy: copying is not supported" in str(excinfo.value)
 
 
-def test_pyenv_cfg_preserves_symlinks(tmp_path) -> None:
+def test_pyenv_cfg_preserves_symlinks(tmp_path):
     """Test that PyEnvCfg.write() preserves symlinks and doesn't resolve them (issue #2770)."""
     # Create a real directory and a symlink to it
     real_dir = tmp_path / "real_directory"

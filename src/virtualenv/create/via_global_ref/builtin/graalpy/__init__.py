@@ -2,16 +2,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from virtualenv.create.describe import PosixSupports, WindowsSupports
 from virtualenv.create.via_global_ref.builtin.ref import PathRefToDest, RefMust, RefWhen
 from virtualenv.create.via_global_ref.builtin.via_global_self_do import ViaGlobalRefVirtualenvBuiltin
-
-if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
-
-    from python_discovery import PythonInfo
 
 
 class GraalPy(ViaGlobalRefVirtualenvBuiltin, ABC):
@@ -22,15 +16,15 @@ class GraalPy(ViaGlobalRefVirtualenvBuiltin, ABC):
         raise NotImplementedError
 
     @classmethod
-    def can_describe(cls, interpreter: PythonInfo) -> bool:
-        return interpreter.implementation == "GraalPy" and super().can_describe(interpreter)
+    def can_describe(cls, interpreter):
+        return interpreter.implementation == "GraalVM" and super().can_describe(interpreter)
 
     @classmethod
-    def exe_stem(cls) -> str:
+    def exe_stem(cls):
         return "graalpy"
 
     @classmethod
-    def exe_names(cls, interpreter: PythonInfo) -> set[str]:
+    def exe_names(cls, interpreter):
         return {
             cls.exe_stem(),
             "python",
@@ -39,15 +33,15 @@ class GraalPy(ViaGlobalRefVirtualenvBuiltin, ABC):
         }
 
     @classmethod
-    def _executables(cls, interpreter: PythonInfo) -> Generator[tuple[Path, list[str], RefMust, RefWhen], None, None]:  # ty: ignore[invalid-method-override]
-        host = Path(interpreter.system_executable)  # ty: ignore[invalid-argument-type]
+    def _executables(cls, interpreter):
+        host = Path(interpreter.system_executable)
         targets = sorted(f"{name}{cls.suffix}" for name in cls.exe_names(interpreter))
         yield host, targets, RefMust.NA, RefWhen.ANY
 
     @classmethod
-    def sources(cls, interpreter: PythonInfo) -> Generator[PathRefToDest]:  # ty: ignore[invalid-method-override]
+    def sources(cls, interpreter):
         yield from super().sources(interpreter)
-        python_dir = Path(interpreter.system_executable).resolve().parent  # ty: ignore[invalid-argument-type]
+        python_dir = Path(interpreter.system_executable).resolve().parent
         if python_dir.name in {"bin", "Scripts"}:
             python_dir = python_dir.parent
 
@@ -61,10 +55,10 @@ class GraalPy(ViaGlobalRefVirtualenvBuiltin, ABC):
                 yield PathRefToDest(jvm_dir, dest=lambda self, s: self.bin_dir.parent / s.name)
 
     @classmethod
-    def _shared_libs(cls, python_dir: Path) -> Iterator[Path]:
+    def _shared_libs(cls, python_dir):
         raise NotImplementedError
 
-    def set_pyenv_cfg(self) -> None:
+    def set_pyenv_cfg(self):
         super().set_pyenv_cfg()
         # GraalPy 24.0 and older had home without the bin
         version = self.interpreter.version_info
@@ -76,7 +70,7 @@ class GraalPy(ViaGlobalRefVirtualenvBuiltin, ABC):
 
 class GraalPyPosix(GraalPy, PosixSupports):
     @classmethod
-    def _native_lib(cls, lib_dir: Path, platform: str) -> Path:
+    def _native_lib(cls, lib_dir, platform):
         if platform == "darwin":
             return lib_dir / "libpythonvm.dylib"
         return lib_dir / "libpythonvm.so"
@@ -84,13 +78,13 @@ class GraalPyPosix(GraalPy, PosixSupports):
 
 class GraalPyWindows(GraalPy, WindowsSupports):
     @classmethod
-    def _native_lib(cls, lib_dir: Path, platform: str) -> Path:  # noqa: ARG003
+    def _native_lib(cls, lib_dir, platform):  # noqa: ARG003
         return lib_dir / "pythonvm.dll"
 
-    def set_pyenv_cfg(self) -> None:
+    def set_pyenv_cfg(self):
         # GraalPy needs an additional entry in pyvenv.cfg on Windows
         super().set_pyenv_cfg()
-        self.pyenv_cfg["venvlauncher_command"] = self.interpreter.system_executable  # ty: ignore[invalid-assignment]
+        self.pyenv_cfg["venvlauncher_command"] = self.interpreter.system_executable
 
 
 __all__ = [

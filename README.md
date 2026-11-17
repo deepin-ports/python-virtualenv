@@ -1,4 +1,4 @@
-# virtualenv
+virtualenv.config.cli.parser.VirtualEnvOptions# virtualenv
 
 [![PyPI](https://img.shields.io/pypi/v/virtualenv?style=flat-square)](https://pypi.org/project/virtualenv)
 [![PyPI - Implementation](https://img.shields.io/pypi/implementation/virtualenv?style=flat-square)](https://pypi.org/project/virtualenv)
@@ -11,7 +11,7 @@
 
 A tool for creating isolated `virtual` python environments.
 
-- [Installation](https://virtualenv.pypa.io/en/latest/how-to/install.html)
+- [Installation](https://virtualenv.pypa.io/en/latest/installation.html)
 - [Documentation](https://virtualenv.pypa.io)
 - [Changelog](https://virtualenv.pypa.io/en/latest/changelog.html)
 - [Issues](https://github.com/pypa/virtualenv/issues)

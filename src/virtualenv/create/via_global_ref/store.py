@@ -1,22 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from python_discovery import PythonInfo
-
-    from virtualenv.create.via_global_ref.api import ViaGlobalRefMeta
 
 
-def handle_store_python(meta: ViaGlobalRefMeta, interpreter: PythonInfo) -> ViaGlobalRefMeta:
+def handle_store_python(meta, interpreter):
     if is_store_python(interpreter):
         meta.symlink_error = "Windows Store Python does not support virtual environments via symlink"
     return meta
 
 
-def is_store_python(interpreter: PythonInfo) -> bool:
-    parts = Path(interpreter.system_executable).parts  # ty: ignore[invalid-argument-type]
+def is_store_python(interpreter):
+    parts = Path(interpreter.system_executable).parts
     return (
         len(parts) > 4  # noqa: PLR2004
         and parts[-4] == "Microsoft"

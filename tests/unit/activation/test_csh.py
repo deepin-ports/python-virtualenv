@@ -18,7 +18,7 @@ from virtualenv.activation import CShellActivator
         (None, None, False),
     ],
 )
-def test_cshell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
+def test_cshell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present):
     # GIVEN
     class MockInterpreter:
         pass
@@ -28,7 +28,7 @@ def test_cshell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
     interpreter.tk_lib = tk_lib
 
     class MockCreator:
-        def __init__(self, dest) -> None:
+        def __init__(self, dest):
             self.dest = dest
             self.bin_dir = dest / "bin"
             self.bin_dir.mkdir()
@@ -61,7 +61,7 @@ def test_cshell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
         assert "setenv TCL_LIBRARY ''" in content
 
 
-def test_csh(activation_tester_class, activation_tester) -> None:
+def test_csh(activation_tester_class, activation_tester):
     exe = f"tcsh{'.exe' if sys.platform == 'win32' else ''}"
     if which(exe):
         version_text = check_output([exe, "--version"], text=True, encoding="utf-8")
@@ -73,7 +73,7 @@ def test_csh(activation_tester_class, activation_tester) -> None:
         def __init__(self, session) -> None:
             super().__init__(CShellActivator, session, "csh", "activate.csh", "csh")
 
-        def print_prompt(self) -> str:
+        def print_prompt(self):
             # Original csh doesn't print the last newline,
             # breaking the test; hence the trailing echo.
             return "echo 'source \"$VIRTUAL_ENV/bin/activate.csh\"; echo $prompt' | csh -i ; echo"

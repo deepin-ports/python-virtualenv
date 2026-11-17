@@ -1,33 +1,32 @@
-From: Stefano Rivera <stefanor@debian.org>
-Date: Fri, 8 May 2026 18:45:40 -0400
-Subject: Use Debian's packaged wheels for --no-download
+From: Scott Kitterman <scott@kitterman.com>
+Date: Sun, 20 Jun 2021 13:49:30 -0400
+Subject: Update base embed to include pip provided wheels for --no-download
 
-Generate wheel lists, hashes and attributes from Debian's shipped wheels packages.
+Generate wheel lists and attributes for base install to match pip wheel
+versions and add pkg_resources to the base install for no download.
 
 Origin: vendor
 Forwarded: not-needed
-Last-Update: 2026-05-08
+Last-Update: 2020-07-15
 ---
- src/virtualenv/seed/wheels/embed/__init__.py | 23 +++++++++++++++++++++++
- 1 file changed, 23 insertions(+)
+ src/virtualenv/seed/wheels/embed/__init__.py | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
 
 diff --git a/src/virtualenv/seed/wheels/embed/__init__.py b/src/virtualenv/seed/wheels/embed/__init__.py
-index 1b5e2a2..77d16e7 100644
+index 11ed220..c38be94 100644
 --- a/src/virtualenv/seed/wheels/embed/__init__.py
 +++ b/src/virtualenv/seed/wheels/embed/__init__.py
-@@ -123,6 +123,29 @@ def _hash_bundled_wheel(path: Path) -> str:
-     return digest.hexdigest()
+@@ -43,6 +43,27 @@ BUNDLE_SUPPORT = {
+ MAX = "3.8"
  
  
-+# Debian specific: Update BUNDLE_SUPPORT and BUNDLE_SHA256 to match pip wheels
-+# shipped in /usr/share/python-wheels for base install.
++# Debian specific: Update BUNDLE_SUPPORT to match pip wheels shipped in
++# /usr/share/python-wheels for base install + pkg_resources.
 +def list_available_wheels(versions):
++    import os
 +    bundle = {version: {} for version in versions}
-+    wheel_files = []
-+    for whl in Path(BUNDLE_FOLDER).iterdir():
-+        wheel_files.append(Wheel.from_path(whl))
-+        BUNDLE_SHA256[whl.name] = _hash_bundled_wheel(whl)
-+
++    wheel_files = [Wheel.from_path(BUNDLE_FOLDER / fn)
++                   for fn in os.listdir(BUNDLE_FOLDER)]
 +    # Sort wheels so the latest compatible version wins
 +    wheel_files.sort(key=lambda wheel: wheel.version_tuple)
 +    for wheel in wheel_files:
@@ -42,6 +41,6 @@ index 1b5e2a2..77d16e7 100644
 +# End Debian specific
 +
 +
- __all__ = [
-     "BUNDLE_FOLDER",
-     "BUNDLE_SHA256",
+ def get_embed_wheel(distribution, for_py_version):
+     mapping = BUNDLE_SUPPORT.get(for_py_version, {}) or BUNDLE_SUPPORT[MAX]
+     wheel_file = mapping.get(distribution)

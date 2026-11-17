@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import shlex
-import shutil
-import subprocess
-import sys
 from argparse import Namespace
 
 import pytest
 
 from virtualenv.activation import BashActivator
 from virtualenv.info import IS_WIN
-from virtualenv.run import cli_run
 
 
 @pytest.mark.skipif(IS_WIN, reason="Github Actions ships with WSL bash")
@@ -21,7 +16,7 @@ from virtualenv.run import cli_run
         (None, None, False),
     ],
 )
-def test_bash_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
+def test_bash_tkinter_generation(tmp_path, tcl_lib, tk_lib, present):
     # GIVEN
     class MockInterpreter:
         pass
@@ -31,7 +26,7 @@ def test_bash_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
     interpreter.tk_lib = tk_lib
 
     class MockCreator:
-        def __init__(self, dest) -> None:
+        def __init__(self, dest):
             self.dest = dest
             self.bin_dir = dest / "bin"
             self.bin_dir.mkdir()
@@ -76,64 +71,8 @@ def test_bash_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
 
 
 @pytest.mark.skipif(IS_WIN, reason="Github Actions ships with WSL bash")
-def test_bash_activate_relocation_resolves_virtual_env(tmp_path, current_fastest) -> None:
-    original = tmp_path / "original"
-    cli_run([
-        "--without-pip",
-        str(original),
-        "--creator",
-        current_fastest,
-        "--no-periodic-update",
-        "--activators",
-        "bash",
-    ])
-    relocated = tmp_path / "relocated"
-    shutil.move(original, relocated)
-
-    work_dir = tmp_path / "workdir"
-    work_dir.mkdir()
-    activate_script = relocated / "bin" / "activate"
-    result = subprocess.run(
-        ["bash", "-c", f'source "{activate_script}" 2>/dev/null && echo "$VIRTUAL_ENV"'],
-        capture_output=True,
-        text=True,
-        cwd=str(work_dir),
-    )
-    assert result.returncode == 0
-    assert result.stdout.strip() == str(relocated)
-
-
-@pytest.mark.skipif(IS_WIN, reason="Github Actions ships with WSL bash")
-def test_bash_activate_does_not_export_ps1(tmp_path, current_fastest) -> None:
-    dest = tmp_path / "env"
-    cli_run([
-        "--without-pip",
-        str(dest),
-        "--creator",
-        current_fastest,
-        "--no-periodic-update",
-        "--activators",
-        "bash",
-    ])
-    activate_script = dest / "bin" / "activate"
-    print_ps1 = f"{shlex.quote(sys.executable)} -c 'import os; print(os.environ.get(\"PS1\"))'"
-    result = subprocess.run(
-        [
-            "bash",
-            "-c",
-            (f"unset PS1; PS1='base$ '; source \"{activate_script}\" && {print_ps1} && deactivate && {print_ps1}"),
-        ],
-        capture_output=True,
-        encoding="utf-8",
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == ["None", "None"]
-
-
-@pytest.mark.skipif(IS_WIN, reason="Github Actions ships with WSL bash")
 @pytest.mark.parametrize("hashing_enabled", [True, False])
-def test_bash(raise_on_non_source_class, hashing_enabled, activation_tester) -> None:
+def test_bash(raise_on_non_source_class, hashing_enabled, activation_tester):
     class Bash(raise_on_non_source_class):
         def __init__(self, session) -> None:
             super().__init__(
@@ -151,6 +90,6 @@ def test_bash(raise_on_non_source_class, hashing_enabled, activation_tester) -> 
             return super().activate_call(script) + " || exit 1"
 
         def print_prompt(self):
-            return 'printf "%s\\n" "$PS1"'
+            return self.print_os_env_var("PS1")
 
     activation_tester(Bash)

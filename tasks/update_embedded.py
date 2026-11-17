@@ -1,4 +1,4 @@
-"""Helper script to rebuild virtualenv.py from virtualenv_support."""
+"""Helper script to rebuild virtualenv.py from virtualenv_support."""  # noqa: EXE002
 
 from __future__ import annotations
 
@@ -6,14 +6,10 @@ import codecs
 import locale
 import os
 import re
-from typing import TYPE_CHECKING, NoReturn
 from zlib import crc32 as _crc32
 
-if TYPE_CHECKING:
-    from pathlib import Path
 
-
-def crc32(data: str) -> int:
+def crc32(data):
     """Python version idempotent."""
     return _crc32(data.encode()) & 0xFFFFFFFF
 
@@ -28,7 +24,7 @@ file_regex = re.compile(r'# file (.*?)\n([a-zA-Z][a-zA-Z0-9_]+) = convert\(\n {4
 file_template = '# file {filename}\n{variable} = convert(\n    """\n{data}"""\n)'
 
 
-def rebuild(script_path: Path) -> None:
+def rebuild(script_path):
     encoding = (
         locale.getencoding() if hasattr(locale, "getencoding") else locale.getpreferredencoding(do_setlocale=False)
     )
@@ -53,7 +49,7 @@ def rebuild(script_path: Path) -> None:
     report(1 if not count or did_update else 0, new_content, next_match, script_content, script_path)
 
 
-def handle_file(previous_content: str, filename: str, variable_name: str, previous_encoded: str) -> tuple[bool, str]:
+def handle_file(previous_content, filename, variable_name, previous_encoded):
     print(f"Found file {filename}")  # noqa: T201
     current_path = os.path.realpath(os.path.join(here, "..", "src", "virtualenv_embedded", filename))
     _, file_type = os.path.splitext(current_path)
@@ -73,7 +69,7 @@ def handle_file(previous_content: str, filename: str, variable_name: str, previo
     return True, new_part
 
 
-def report(exit_code: int, new: str, next_match: re.Match[str] | None, current: str, script_path: Path) -> NoReturn:
+def report(exit_code, new, next_match, current, script_path):
     if new != current:
         print("Content updated; overwriting... ", end="")  # noqa: T201
         script_path.write_bytes(new)

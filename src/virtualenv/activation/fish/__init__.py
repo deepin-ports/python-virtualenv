@@ -1,21 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from virtualenv.activation.via_template import ViaTemplateActivator
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from pathlib import Path
-
-    from virtualenv.create.creator import Creator
 
 
 class FishActivator(ViaTemplateActivator):
-    def templates(self) -> Iterator[str]:
+    def templates(self):
         yield "activate.fish"
 
-    def replacements(self, creator: Creator, dest_folder: Path) -> dict[str, str]:
+    def replacements(self, creator, dest_folder):
         data = super().replacements(creator, dest_folder)
         data.update({
             "__TCL_LIBRARY__": getattr(creator.interpreter, "tcl_lib", None) or "",

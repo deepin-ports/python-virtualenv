@@ -11,7 +11,6 @@ from virtualenv.info import IS_ZIPAPP
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
-    from typing import Any
 
 
 class AppData(ABC):
@@ -133,16 +132,16 @@ class ContentStore(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def read(self) -> Any:  # noqa: ANN401
+    def read(self) -> str:
         """Read the stored content.
 
-        :returns: the stored content
+        :returns: the stored content as a string
 
         """
         raise NotImplementedError
 
     @abstractmethod
-    def write(self, content: Any) -> None:  # noqa: ANN401
+    def write(self, content: str) -> None:
         """Write content to the store.
 
         :param content: the content to write

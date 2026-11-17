@@ -14,17 +14,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
-    from typing import Any, NoReturn
-
-    from python_discovery import PythonInfo
 
     from virtualenv.app_data.base import AppData
     from virtualenv.config.cli.parser import VirtualEnvOptions
+    from virtualenv.discovery.py_info import PythonInfo
 
-from os.path import commonpath
-
+from virtualenv.discovery.cached_py_info import LogCmd
 from virtualenv.util.path import safe_delete
-from virtualenv.util.subprocess import LogCmd, run_cmd
+from virtualenv.util.subprocess import run_cmd
 from virtualenv.version import __version__
 
 from .pyenv_cfg import PyEnvCfg
@@ -64,28 +61,10 @@ class Creator(ABC):
         @property
         def exe(self) -> Path: ...
 
-        @property
-        def env_name(self) -> str: ...
-
-        @property
-        def bin_dir(self) -> Path: ...
-
-        @property
-        def script_dir(self) -> Path: ...
-
-        @property
-        def libs(self) -> list[Path]: ...
-
-        @property
-        def purelib(self) -> Path: ...
-
-        @property
-        def platlib(self) -> Path: ...
-
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({', '.join(f'{k}={v}' for k, v in self._args())})"
 
-    def _args(self) -> list[tuple[str, Any]]:
+    def _args(self):
         return [
             ("dest", str(self.dest)),
             ("clear", self.clear),
@@ -93,7 +72,7 @@ class Creator(ABC):
         ]
 
     @classmethod
-    def can_create(cls, interpreter: PythonInfo) -> CreatorMeta | bool | None:  # noqa: ARG003
+    def can_create(cls, interpreter: PythonInfo) -> CreatorMeta | None:  # noqa: ARG003
         """Determine if we can create a virtual environment.
 
         :param interpreter: the interpreter in question
@@ -102,7 +81,7 @@ class Creator(ABC):
             :meth:`add_parser_arguments`
 
         """
-        return True
+        return True  # type: ignore[return-value]
 
     @classmethod
     def add_parser_arguments(
@@ -146,11 +125,11 @@ class Creator(ABC):
         raise NotImplementedError
 
     @classmethod
-    def validate_dest(cls, raw_value: str) -> str:  # noqa: C901
+    def validate_dest(cls, raw_value):  # noqa: C901
         """No path separator in the path, valid chars and must be write-able."""
 
-        def non_write_able(dest: Path, value: Path) -> NoReturn:
-            common = Path(commonpath([str(value), str(dest)]))
+        def non_write_able(dest, value):
+            common = Path(*os.path.commonprefix([value.parts, dest.parts]))
             msg = f"the destination {dest.relative_to(common)} is not write-able at {common}"
             raise ArgumentTypeError(msg)
 
@@ -195,7 +174,7 @@ class Creator(ABC):
             dest = base
         return str(value)
 
-    def run(self) -> None:
+    def run(self):
         if self.dest.exists() and self.clear:
             LOGGER.debug("delete %s", self.dest)
             safe_delete(self.dest)
@@ -205,7 +184,7 @@ class Creator(ABC):
         if not self.no_vcs_ignore:
             self.setup_ignore_vcs()
 
-    def add_cachedir_tag(self) -> None:
+    def add_cachedir_tag(self):
         """Generate a file indicating that this is not meant to be backed up."""
         cachedir_tag_file = self.dest / "CACHEDIR.TAG"
         if not cachedir_tag_file.exists():
@@ -217,22 +196,20 @@ class Creator(ABC):
             """).strip()
             cachedir_tag_file.write_text(cachedir_tag_text, encoding="utf-8")
 
-    def set_pyenv_cfg(self) -> None:
+    def set_pyenv_cfg(self):
         self.pyenv_cfg.content = OrderedDict()
-        system_executable = self.interpreter.system_executable or self.interpreter.executable
-        assert system_executable is not None  # noqa: S101
-        self.pyenv_cfg["home"] = os.path.dirname(os.path.abspath(system_executable))
+        self.pyenv_cfg["home"] = os.path.dirname(os.path.abspath(self.interpreter.system_executable))
         self.pyenv_cfg["implementation"] = self.interpreter.implementation
         self.pyenv_cfg["version_info"] = ".".join(str(i) for i in self.interpreter.version_info)
         self.pyenv_cfg["version"] = ".".join(str(i) for i in self.interpreter.version_info[:3])
-        self.pyenv_cfg["executable"] = os.path.realpath(system_executable)
+        self.pyenv_cfg["executable"] = os.path.realpath(self.interpreter.system_executable)
         self.pyenv_cfg["command"] = f"{sys.executable} -m virtualenv {self.dest}"
         self.pyenv_cfg["virtualenv"] = __version__
         if self.prompt is not None:
             prompt_value = os.path.basename(os.getcwd()) if self.prompt == "." else self.prompt
             self.pyenv_cfg["prompt"] = prompt_value
 
-    def setup_ignore_vcs(self) -> None:
+    def setup_ignore_vcs(self):
         """Generate ignore instructions for version control systems."""
         # mark this folder to be ignored by VCS, handle https://www.python.org/dev/peps/pep-0610/#registered-vcs
         git_ignore = self.dest / ".gitignore"
@@ -245,18 +222,18 @@ class Creator(ABC):
         # Subversion - does not support ignore files, requires direct manipulation with the svn tool
 
     @property
-    def debug(self) -> dict[str, Any] | None:
+    def debug(self):
         """:returns: debug information about the virtual environment (only valid after :meth:`create` has run)"""
         if self._debug is None and self.exe is not None:
             self._debug = get_env_debug_info(self.exe, self.debug_script(), self.app_data, self.env)
         return self._debug
 
     @staticmethod
-    def debug_script() -> Path:
+    def debug_script():
         return DEBUG_SCRIPT
 
 
-def get_env_debug_info(env_exe: Path, debug_script: Path, app_data: AppData, env: dict[str, str]) -> dict[str, Any]:
+def get_env_debug_info(env_exe, debug_script, app_data, env):
     env = env.copy()
     env.pop("PYTHONPATH", None)
 
@@ -266,26 +243,22 @@ def get_env_debug_info(env_exe: Path, debug_script: Path, app_data: AppData, env
         code, out, err = run_cmd(cmd)
 
     try:
-        result = _parse_debug_output(code, out, err)
+        if code != 0:
+            if out:
+                result = literal_eval(out)
+            else:
+                if code == 2 and "file" in err:  # noqa: PLR2004
+                    # Re-raise FileNotFoundError from `run_cmd()`
+                    raise OSError(err)  # noqa: TRY301
+                raise Exception(err)  # noqa: TRY002, TRY301
+        else:
+            result = json.loads(out)
+        if err:
+            result["err"] = err
     except Exception as exception:  # noqa: BLE001
         return {"out": out, "err": err, "returncode": code, "exception": repr(exception)}
     if "sys" in result and "path" in result["sys"]:
         del result["sys"]["path"][0]
-    return result
-
-
-def _parse_debug_output(code: int, out: str, err: str) -> dict[str, Any]:
-    if code != 0:
-        if out:
-            result = literal_eval(out)
-        elif code == 2 and "file" in err:  # noqa: PLR2004
-            raise OSError(err)
-        else:
-            raise Exception(err)  # noqa: TRY002
-    else:
-        result = json.loads(out)
-    if err:
-        result["err"] = err
     return result
 
 

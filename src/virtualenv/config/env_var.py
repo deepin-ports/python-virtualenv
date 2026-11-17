@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING
 
 from .convert import convert
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from typing import Any
 
-    from .convert import TypeData
-
-
-def get_env_var(key: str, as_type: TypeData, env: Mapping[str, str]) -> tuple[Any, str] | None:
+def get_env_var(key, as_type, env):
     """Get the environment variable option.
 
     :param key: the config key requested

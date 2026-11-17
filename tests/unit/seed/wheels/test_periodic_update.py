@@ -33,14 +33,14 @@ from virtualenv.seed.wheels.periodic_update import (
 from virtualenv.util.subprocess import CREATE_NO_WINDOW
 
 
-@pytest.fixture(autouse=True)  # noqa: RUF076
-def _clear_pypi_info_cache() -> None:
+@pytest.fixture(autouse=True)
+def _clear_pypi_info_cache():
     from virtualenv.seed.wheels.periodic_update import _PYPI_CACHE  # noqa: PLC0415
 
     _PYPI_CACHE.clear()
 
 
-def test_manual_upgrade(session_app_data, caplog, mocker, for_py_version) -> None:
+def test_manual_upgrade(session_app_data, caplog, mocker, for_py_version):
     wheel = get_embed_wheel("pip", for_py_version)
     new_version = NewVersion(
         wheel.path,
@@ -49,7 +49,14 @@ def test_manual_upgrade(session_app_data, caplog, mocker, for_py_version) -> Non
         "manual",
     )
 
-    def _do_update(distribution, **_kwargs):
+    def _do_update(  # noqa: PLR0913
+        distribution,
+        for_py_version,  # noqa: ARG001
+        embed_filename,  # noqa: ARG001
+        app_data,  # noqa: ARG001
+        search_dirs,  # noqa: ARG001
+        periodic,  # noqa: ARG001
+    ):
         if distribution == "pip":
             return [new_version]
         return []
@@ -67,12 +74,12 @@ def test_manual_upgrade(session_app_data, caplog, mocker, for_py_version) -> Non
         packages[args[1]["distribution"]].append(args[1]["for_py_version"])
     packages = {key: sorted(value) for key, value in packages.items()}
     versions = sorted(BUNDLE_SUPPORT.keys())
-    expected = {"setuptools": versions, "pip": versions}
+    expected = {"setuptools": versions, "wheel": ["3.8"], "pip": versions}
     assert packages == expected
 
 
 @pytest.mark.usefixtures("session_app_data")
-def test_pick_periodic_update(tmp_path, mocker, for_py_version) -> None:
+def test_pick_periodic_update(tmp_path, mocker, for_py_version):
     embed, current = get_embed_wheel("setuptools", "3.6"), get_embed_wheel("setuptools", for_py_version)
     mocker.patch("virtualenv.seed.wheels.bundle.load_embed_wheel", return_value=embed)
     completed = datetime.now(tz=timezone.utc) - timedelta(days=29)
@@ -102,7 +109,7 @@ def test_pick_periodic_update(tmp_path, mocker, for_py_version) -> None:
     assert f"setuptools-{current.version}.dist-info" in installed
 
 
-def test_periodic_update_stops_at_current(mocker, session_app_data, for_py_version) -> None:
+def test_periodic_update_stops_at_current(mocker, session_app_data, for_py_version):
     current = get_embed_wheel("setuptools", for_py_version)
 
     now, completed = datetime.now(tz=timezone.utc), datetime.now(tz=timezone.utc) - timedelta(days=29)
@@ -122,7 +129,7 @@ def test_periodic_update_stops_at_current(mocker, session_app_data, for_py_versi
     assert result.path == current.path
 
 
-def test_periodic_update_latest_per_patch(mocker, session_app_data, for_py_version) -> None:
+def test_periodic_update_latest_per_patch(mocker, session_app_data, for_py_version):
     current = get_embed_wheel("setuptools", for_py_version)
     expected_path = wheel_path(current, (0, 1, 2))
     now = datetime.now(tz=timezone.utc)
@@ -143,7 +150,7 @@ def test_periodic_update_latest_per_patch(mocker, session_app_data, for_py_versi
     assert str(result.path) == expected_path
 
 
-def test_periodic_update_latest_per_patch_prev_is_manual(mocker, session_app_data, for_py_version) -> None:
+def test_periodic_update_latest_per_patch_prev_is_manual(mocker, session_app_data, for_py_version):
     current = get_embed_wheel("setuptools", for_py_version)
     expected_path = wheel_path(current, (0, 1, 2))
     now = datetime.now(tz=timezone.utc)
@@ -165,7 +172,7 @@ def test_periodic_update_latest_per_patch_prev_is_manual(mocker, session_app_dat
     assert str(result.path) == expected_path
 
 
-def test_manual_update_honored(mocker, session_app_data, for_py_version) -> None:
+def test_manual_update_honored(mocker, session_app_data, for_py_version):
     current = get_embed_wheel("setuptools", for_py_version)
     expected_path = wheel_path(current, (0, 1, 1))
     now = datetime.now(tz=timezone.utc)
@@ -224,7 +231,7 @@ _UPDATE_SKIP = {
 
 
 @pytest.mark.parametrize("u_log", list(_UPDATE_SKIP.values()), ids=list(_UPDATE_SKIP.keys()))
-def test_periodic_update_skip(u_log, mocker, for_py_version, session_app_data, time_freeze) -> None:
+def test_periodic_update_skip(u_log, mocker, for_py_version, session_app_data, time_freeze):
     time_freeze(_UP_NOW)
     mocker.patch("virtualenv.app_data.via_disk_folder.JSONStoreDisk.read", return_value=u_log.to_dict())
     mocker.patch("virtualenv.seed.wheels.periodic_update.trigger_update", side_effect=RuntimeError)
@@ -251,7 +258,7 @@ _UPDATE_YES = {
 
 
 @pytest.mark.parametrize("u_log", list(_UPDATE_YES.values()), ids=list(_UPDATE_YES.keys()))
-def test_periodic_update_trigger(u_log, mocker, for_py_version, session_app_data, time_freeze) -> None:
+def test_periodic_update_trigger(u_log, mocker, for_py_version, session_app_data, time_freeze):
     time_freeze(_UP_NOW)
     mocker.patch("virtualenv.app_data.via_disk_folder.JSONStoreDisk.read", return_value=u_log.to_dict())
     write = mocker.patch("virtualenv.app_data.via_disk_folder.JSONStoreDisk.write")
@@ -267,7 +274,7 @@ def test_periodic_update_trigger(u_log, mocker, for_py_version, session_app_data
     assert load_datetime(wrote_json["started"]) == _UP_NOW
 
 
-def test_trigger_update_no_debug(for_py_version, session_app_data, tmp_path, mocker, monkeypatch) -> None:
+def test_trigger_update_no_debug(for_py_version, session_app_data, tmp_path, mocker, monkeypatch):
     monkeypatch.delenv("_VIRTUALENV_PERIODIC_UPDATE_INLINE", raising=False)
     current = get_embed_wheel("setuptools", for_py_version)
     process = mocker.MagicMock()
@@ -315,7 +322,7 @@ def test_trigger_update_no_debug(for_py_version, session_app_data, tmp_path, moc
     assert process.communicate.call_count == 0
 
 
-def test_trigger_update_debug(for_py_version, session_app_data, tmp_path, mocker, monkeypatch) -> None:
+def test_trigger_update_debug(for_py_version, session_app_data, tmp_path, mocker, monkeypatch):
     monkeypatch.setenv("_VIRTUALENV_PERIODIC_UPDATE_INLINE", "1")
     current = get_embed_wheel("pip", for_py_version)
 
@@ -361,7 +368,7 @@ def test_trigger_update_debug(for_py_version, session_app_data, tmp_path, mocker
     assert process.communicate.call_count == 1
 
 
-def test_do_update_first(tmp_path, mocker, time_freeze) -> None:
+def test_do_update_first(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -439,14 +446,22 @@ def test_do_update_first(tmp_path, mocker, time_freeze) -> None:
     }
 
 
-def test_do_update_skip_already_done(tmp_path, mocker, time_freeze) -> None:
+def test_do_update_skip_already_done(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW + timedelta(hours=1))
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
     extra = tmp_path / "extra"
     extra.mkdir()
 
-    def _download_wheel(**_kwargs):
+    def _download_wheel(  # noqa: PLR0913
+        distribution,  # noqa: ARG001
+        version_spec,  # noqa: ARG001
+        for_py_version,  # noqa: ARG001
+        search_dirs,  # noqa: ARG001
+        app_data,  # noqa: ARG001
+        to_folder,  # noqa: ARG001
+        env,  # noqa: ARG001
+    ):
         return wheel.path
 
     download_wheel = mocker.patch("virtualenv.seed.wheels.acquire.download_wheel", side_effect=_download_wheel)
@@ -486,13 +501,13 @@ def test_do_update_skip_already_done(tmp_path, mocker, time_freeze) -> None:
     }
 
 
-def test_new_version_eq() -> None:
+def test_new_version_eq():
     now = datetime.now(tz=timezone.utc)
     value = NewVersion("a", now, now, "periodic")
     assert value == NewVersion("a", now, now, "periodic")
 
 
-def test_new_version_ne() -> None:
+def test_new_version_ne():
     assert NewVersion("a", datetime.now(tz=timezone.utc), datetime.now(tz=timezone.utc), "periodic") != NewVersion(
         "a",
         datetime.now(tz=timezone.utc),
@@ -501,9 +516,7 @@ def test_new_version_ne() -> None:
     )
 
 
-def test_get_release_unsecure(mocker, caplog, monkeypatch) -> None:
-    monkeypatch.setenv("VIRTUALENV_PERIODIC_UPDATE_INSECURE", "1")
-
+def test_get_release_unsecure(mocker, caplog):
     @contextmanager
     def _release(of, context):
         assert of == "https://pypi.org/pypi/pip/json"
@@ -523,18 +536,7 @@ def test_get_release_unsecure(mocker, caplog, monkeypatch) -> None:
     assert " failed " in caplog.text
 
 
-def test_get_release_verified_failure_does_not_fallback(mocker, monkeypatch) -> None:
-    monkeypatch.delenv("VIRTUALENV_PERIODIC_UPDATE_INSECURE", raising=False)
-    url_o = mocker.patch("virtualenv.seed.wheels.periodic_update.urlopen", side_effect=URLError("insecure"))
-
-    result = release_date_for_wheel_path(Path("pip-20.1.whl"))
-
-    assert result is None
-    assert url_o.call_count == 1
-    assert url_o.call_args.kwargs["context"] is None
-
-
-def test_get_release_fails(mocker, caplog) -> None:
+def test_get_release_fails(mocker, caplog):
     exc = RuntimeError("oh no")
     url_o = mocker.patch("virtualenv.seed.wheels.periodic_update.urlopen", side_effect=exc)
 
@@ -556,11 +558,11 @@ def mock_download(mocker, pip_version_remote):
     do = download()
     return mocker.patch(
         "virtualenv.seed.wheels.acquire.download_wheel",
-        side_effect=lambda *_a, **_k: next(do),
+        side_effect=lambda *a, **k: next(do),  # noqa: ARG005
     )
 
 
-def test_download_stop_with_embed(tmp_path, mocker, time_freeze) -> None:
+def test_download_stop_with_embed(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -577,13 +579,13 @@ def test_download_stop_with_embed(tmp_path, mocker, time_freeze) -> None:
     do_update("pip", "3.9", str(wheel.path), str(app_data_outer), [], True)
 
     assert download_wheel.call_count == 3
-    assert url_o.call_count == 1
+    assert url_o.call_count == 2
 
     assert read_dict.call_count == 1
     assert write.call_count == 1
 
 
-def test_download_manual_stop_after_one_download(tmp_path, mocker, time_freeze) -> None:
+def test_download_manual_stop_after_one_download(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -600,12 +602,12 @@ def test_download_manual_stop_after_one_download(tmp_path, mocker, time_freeze) 
     do_update("pip", "3.9", str(wheel.path), str(app_data_outer), [], False)
 
     assert download_wheel.call_count == 1
-    assert url_o.call_count == 1
+    assert url_o.call_count == 2
     assert read_dict.call_count == 1
     assert write.call_count == 1
 
 
-def test_download_manual_ignores_pre_release(tmp_path, mocker, time_freeze) -> None:
+def test_download_manual_ignores_pre_release(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -623,7 +625,7 @@ def test_download_manual_ignores_pre_release(tmp_path, mocker, time_freeze) -> N
     do_update("pip", "3.9", str(wheel.path), str(app_data_outer), [], False)
 
     assert download_wheel.call_count == 1
-    assert url_o.call_count == 1
+    assert url_o.call_count == 2
     assert read_dict.call_count == 1
     assert write.call_count == 1
     wrote_json = write.call_args[0][0]
@@ -638,7 +640,7 @@ def test_download_manual_ignores_pre_release(tmp_path, mocker, time_freeze) -> N
     ]
 
 
-def test_download_periodic_stop_at_first_usable(tmp_path, mocker, time_freeze) -> None:
+def test_download_periodic_stop_at_first_usable(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -650,7 +652,7 @@ def test_download_periodic_stop_at_first_usable(tmp_path, mocker, time_freeze) -
     rel_date_gen = iter(rel_date_remote)
     release_date = mocker.patch(
         "virtualenv.seed.wheels.periodic_update.release_date_for_wheel_path",
-        side_effect=lambda *_a, **_k: next(rel_date_gen),
+        side_effect=lambda *a, **k: next(rel_date_gen),  # noqa: ARG005
     )
 
     last_update = _UP_NOW - timedelta(days=14)
@@ -666,7 +668,7 @@ def test_download_periodic_stop_at_first_usable(tmp_path, mocker, time_freeze) -
     assert write.call_count == 1
 
 
-def test_download_periodic_stop_at_first_usable_with_previous_minor(tmp_path, mocker, time_freeze) -> None:
+def test_download_periodic_stop_at_first_usable_with_previous_minor(tmp_path, mocker, time_freeze):
     time_freeze(_UP_NOW)
     wheel = get_embed_wheel("pip", "3.9")
     app_data_outer = AppDataDiskFolder(str(tmp_path / "app"))
@@ -682,7 +684,7 @@ def test_download_periodic_stop_at_first_usable_with_previous_minor(tmp_path, mo
     rel_date_gen = iter(rel_date_remote)
     release_date = mocker.patch(
         "virtualenv.seed.wheels.periodic_update.release_date_for_wheel_path",
-        side_effect=lambda *_a, **_k: next(rel_date_gen),
+        side_effect=lambda *a, **k: next(rel_date_gen),  # noqa: ARG005
     )
 
     last_update = _UP_NOW - timedelta(days=14)

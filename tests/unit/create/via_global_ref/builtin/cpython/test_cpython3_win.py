@@ -13,7 +13,7 @@ CPYTHON3_PATH = (
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_2_exe_on_default_py_host(py_info, mock_files) -> None:
+def test_2_exe_on_default_py_host(py_info, mock_files):
     mock_files(CPYTHON3_PATH, [py_info.system_executable])
     sources = tuple(CPython3Windows.sources(interpreter=py_info))
     # Default Python exe.
@@ -23,7 +23,7 @@ def test_2_exe_on_default_py_host(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_3_exe_on_not_default_py_host(py_info, mock_files) -> None:
+def test_3_exe_on_not_default_py_host(py_info, mock_files):
     # Not default python host.
     py_info.system_executable = path(py_info.prefix, "python666.exe")
     mock_files(CPYTHON3_PATH, [py_info.system_executable])
@@ -36,7 +36,7 @@ def test_3_exe_on_not_default_py_host(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_only_shim(py_info, mock_files) -> None:
+def test_only_shim(py_info, mock_files):
     shim = path(py_info.system_stdlib, "venv\\scripts\\nt\\python.exe")
     py_files = (
         path(py_info.prefix, "libcrypto-1_1.dll"),
@@ -54,7 +54,7 @@ def test_only_shim(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_exe_dll_pyd_without_shim(py_info, mock_files) -> None:
+def test_exe_dll_pyd_without_shim(py_info, mock_files):
     py_files = (
         path(py_info.prefix, "libcrypto-1_1.dll"),
         path(py_info.prefix, "libffi-7.dll"),
@@ -70,7 +70,7 @@ def test_exe_dll_pyd_without_shim(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_python_zip_if_exists_and_set_in_path(py_info, mock_files) -> None:
+def test_python_zip_if_exists_and_set_in_path(py_info, mock_files):
     python_zip_name = f"python{py_info.version_nodot}.zip"
     python_zip = path(py_info.prefix, python_zip_name)
     mock_files(CPYTHON3_PATH, [python_zip])
@@ -80,7 +80,7 @@ def test_python_zip_if_exists_and_set_in_path(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_no_python_zip_if_exists_and_not_set_in_path(py_info, mock_files) -> None:
+def test_no_python_zip_if_exists_and_not_set_in_path(py_info, mock_files):
     python_zip_name = f"python{py_info.version_nodot}.zip"
     python_zip = path(py_info.prefix, python_zip_name)
     py_info.path.remove(python_zip)
@@ -91,7 +91,7 @@ def test_no_python_zip_if_exists_and_not_set_in_path(py_info, mock_files) -> Non
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_no_python_zip_if_not_exists(py_info, mock_files) -> None:
+def test_no_python_zip_if_not_exists(py_info, mock_files):
     python_zip_name = f"python{py_info.version_nodot}.zip"
     python_zip = path(py_info.prefix, python_zip_name)
     # No `python_zip`, just python.exe file.
@@ -102,54 +102,25 @@ def test_no_python_zip_if_not_exists(py_info, mock_files) -> None:
 
 
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_python3_exe_present(py_info, mock_files) -> None:
+def test_python3_exe_present(py_info, mock_files):
     mock_files(CPYTHON3_PATH, [py_info.system_executable])
     sources = tuple(CPython3Windows.sources(interpreter=py_info))
     assert contains_exe(sources, py_info.system_executable, "python3.exe")
     assert contains_exe(sources, py_info.system_executable, "python3")
 
 
-@pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_pythonw3_exe_present(py_info, mock_files) -> None:
-    mock_files(CPYTHON3_PATH, [py_info.system_executable])
-    sources = tuple(CPython3Windows.sources(interpreter=py_info))
-    pythonw_refs = [s for s in sources if is_exe(s) and has_src(path(py_info.prefix, "pythonw.exe"))(s)]
-    assert len(pythonw_refs) == 1
-    assert "pythonw3.exe" in pythonw_refs[0].aliases
-
-
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_free_threaded"])
-def test_free_threaded_exe_naming(py_info, mock_files) -> None:
+def test_free_threaded_exe_naming(py_info, mock_files):
     mock_files(CPYTHON3_PATH, [py_info.system_executable])
     sources = tuple(CPython3Windows.sources(interpreter=py_info))
     assert contains_exe(sources, py_info.system_executable, "python3.13t.exe")
     pythonw_refs = [s for s in sources if is_exe(s) and has_src(path(py_info.prefix, "pythonw.exe"))(s)]
     assert len(pythonw_refs) == 1
-    assert "pythonw3.exe" in pythonw_refs[0].aliases
     assert "pythonw3.13t.exe" in pythonw_refs[0].aliases
 
 
-@pytest.mark.parametrize("py_info_name", ["cpython3_win_debug"])
-def test_debug_build_shim(py_info, mock_files) -> None:
-    shim = path(py_info.system_stdlib, "venv\\scripts\\nt\\venvlauncher_d.exe")
-    mock_files(CPYTHON3_PATH, [shim])
-    assert CPython3Windows.has_shim(interpreter=py_info)
-    sources = tuple(CPython3Windows.sources(interpreter=py_info))
-    assert contains_exe(sources, shim)
-
-
-@pytest.mark.parametrize("py_info_name", ["cpython3_win_debug"])
-def test_debug_build_uses_venvlauncher(py_info, mock_files) -> None:
-    launcher = path(py_info.prefix, "venvlauncher_d.exe")
-    w_launcher = path(py_info.prefix, "venvwlauncher_d.exe")
-    mock_files(CPYTHON3_PATH, [py_info.system_executable, launcher, w_launcher])
-    sources = tuple(CPython3Windows.sources(interpreter=py_info))
-    assert contains_exe(sources, launcher, "python.exe")
-    assert contains_exe(sources, w_launcher, "pythonw.exe")
-
-
 @pytest.mark.parametrize("py_info_name", ["cpython3_win_embed"])
-def test_pywin32_dll_exclusion(py_info, mock_files) -> None:
+def test_pywin32_dll_exclusion(py_info, mock_files):
     """Test that pywin32 DLLs are excluded from virtualenv creation."""
     # Mock pywin32 DLLs that should be excluded
     pywin32_dlls = (

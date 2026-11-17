@@ -20,13 +20,11 @@ from .plugin.seeders import SeederSelector
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
-    from .plugin.base import ComponentBuilder
-
 
 def cli_run(
     args: list[str],
     options: VirtualEnvOptions | None = None,
-    setup_logging: bool = True,  # noqa: FBT002
+    setup_logging: bool = True,  # noqa: FBT001, FBT002
     env: MutableMapping[str, str] | None = None,
 ) -> Session:
     """Create a virtual environment given some command line interface arguments.
@@ -50,7 +48,7 @@ def cli_run(
 def session_via_cli(
     args: list[str],
     options: VirtualEnvOptions | None = None,
-    setup_logging: bool = True,  # noqa: FBT002
+    setup_logging: bool = True,  # noqa: FBT001, FBT002
     env: MutableMapping[str, str] | None = None,
 ) -> Session:
     """Create a virtualenv session (same as cli_run, but this does not perform the creation). Use this if you just want to query what the virtual environment would look like, but not actually create it.
@@ -66,28 +64,20 @@ def session_via_cli(
     """
     env = os.environ if env is None else env
     parser, elements = build_parser(args, options, setup_logging, env)
-    options = parser.parse_args(args)  # ty: ignore[invalid-assignment]
-    options.py_version = parser._interpreter.version_info  # noqa: SLF001  # ty: ignore[invalid-assignment, unresolved-attribute]
-    creator, seeder, activators = tuple(
-        e.create(options)  # ty: ignore[invalid-argument-type]
-        for e in elements
-    )  # create types
+    options = parser.parse_args(args)
+    options.py_version = parser._interpreter.version_info  # noqa: SLF001
+    creator, seeder, activators = tuple(e.create(options) for e in elements)  # create types
     return Session(
-        options.verbosity,  # ty: ignore[unresolved-attribute, invalid-argument-type]
-        options.app_data,  # ty: ignore[unresolved-attribute]
-        parser._interpreter,  # noqa: SLF001  # ty: ignore[invalid-argument-type]
-        creator,  # ty: ignore[invalid-argument-type]
-        seeder,  # ty: ignore[invalid-argument-type]
-        activators,  # ty: ignore[invalid-argument-type]
+        options.verbosity,
+        options.app_data,
+        parser._interpreter,  # noqa: SLF001
+        creator,
+        seeder,
+        activators,
     )
 
 
-def build_parser(
-    args: list[str] | None = None,
-    options: VirtualEnvOptions | None = None,
-    setup_logging: bool = True,  # noqa: FBT002
-    env: MutableMapping[str, str] | None = None,
-) -> tuple[VirtualEnvConfigParser, list[ComponentBuilder]]:
+def build_parser(args=None, options=None, setup_logging=True, env=None):  # noqa: FBT002
     parser = VirtualEnvConfigParser(options, os.environ if env is None else env)
     add_version_flag(parser)
     parser.add_argument(
@@ -106,7 +96,7 @@ def build_parser(
     if interpreter is None:
         msg = f"failed to find interpreter for {discover}"
         raise RuntimeError(msg)
-    elements: list[ComponentBuilder] = [
+    elements = [
         CreatorSelector(interpreter, parser),
         SeederSelector(interpreter, parser),
         ActivationSelector(interpreter, parser),
@@ -118,20 +108,18 @@ def build_parser(
     return parser, elements
 
 
-def build_parser_only(args: list[str] | None = None) -> VirtualEnvConfigParser:
+def build_parser_only(args=None):
     """Used to provide a parser for the doc generation."""
     return build_parser(args)[0]
 
 
-def handle_extra_commands(options: VirtualEnvOptions) -> None:
+def handle_extra_commands(options):
     if options.upgrade_embed_wheels:
         result = manual_upgrade(options.app_data, options.env)
         raise SystemExit(result)
 
 
-def load_app_data(
-    args: list[str] | None, parser: VirtualEnvConfigParser, options: VirtualEnvOptions | None
-) -> VirtualEnvOptions:
+def load_app_data(args, parser, options):
     parser.add_argument(
         "--read-only-app-data",
         action="store_true",
@@ -162,7 +150,7 @@ def load_app_data(
     return options
 
 
-def add_version_flag(parser: VirtualEnvConfigParser) -> None:
+def add_version_flag(parser):
     import virtualenv  # noqa: PLC0415
 
     parser.add_argument(
@@ -173,7 +161,7 @@ def add_version_flag(parser: VirtualEnvConfigParser) -> None:
     )
 
 
-def _do_report_setup(parser: VirtualEnvConfigParser, args: list[str] | None, setup_logging: bool) -> None:
+def _do_report_setup(parser, args, setup_logging):
     level_map = ", ".join(f"{logging.getLevelName(line)}={c}" for c, line in sorted(LEVELS.items()))
     msg = "verbosity = verbose - quiet, default {}, mapping => {}"
     verbosity_group = parser.add_argument_group(
@@ -188,7 +176,7 @@ def _do_report_setup(parser: VirtualEnvConfigParser, args: list[str] | None, set
         return
     option, _ = parser.parse_known_args(args)
     if setup_logging:
-        setup_report(option.verbosity)  # ty: ignore[invalid-argument-type]
+        setup_report(option.verbosity)
 
 
 __all__ = [

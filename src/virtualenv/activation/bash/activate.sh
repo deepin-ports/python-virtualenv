@@ -41,10 +41,11 @@ deactivate () {
     # The hash command must be called to get it to forget past
     # commands. Without forgetting past commands the $PATH changes
     # we made may not be respected
-    hash -r 2>/dev/null || true
+    hash -r 2>/dev/null
 
     if [ -n "${_OLD_VIRTUAL_PS1:-}" ] ; then
         PS1="$_OLD_VIRTUAL_PS1"
+        export PS1
         unset _OLD_VIRTUAL_PS1
     fi
 
@@ -61,7 +62,7 @@ deactivate nondestructive
 
 if [ ! -d __VIRTUAL_ENV__ ]; then
     echo "Virtual environment directory __VIRTUAL_ENV__ does not exist!" >&2
-    CURRENT_PATH=$(realpath "${BASH_SOURCE[0]}")
+    CURRENT_PATH=$(realpath "${0}")
     CURRENT_DIR=$(dirname "${CURRENT_PATH}")
     VIRTUAL_ENV="$(realpath "${CURRENT_DIR}/../")"
 else
@@ -115,6 +116,7 @@ fi
 if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT-}" ] ; then
     _OLD_VIRTUAL_PS1="${PS1-}"
     PS1="(${VIRTUAL_ENV_PROMPT}) ${PS1-}"
+    export PS1
 fi
 
 # Make sure to unalias pydoc if it's already there

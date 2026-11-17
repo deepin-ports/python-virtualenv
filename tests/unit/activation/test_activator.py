@@ -8,7 +8,7 @@ from virtualenv.activation.activator import Activator
 
 
 @pytest.mark.graalpy
-def test_activator_prompt_cwd(monkeypatch, tmp_path) -> None:
+def test_activator_prompt_cwd(monkeypatch, tmp_path):
     class FakeActivator(Activator):
         def generate(self, creator):
             raise NotImplementedError

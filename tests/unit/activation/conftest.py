@@ -34,13 +34,12 @@ class ActivationTester:
             try:
                 process = Popen(
                     self._version_cmd,
-                    stdin=subprocess.DEVNULL,
                     universal_newlines=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     encoding="utf-8",
                 )
-                out, err = process.communicate(timeout=30)
+                out, err = process.communicate()
             except Exception as exception:
                 self._version = exception
                 if raise_on_fail:
@@ -76,15 +75,12 @@ class ActivationTester:
         invoke, env = [*self._invoke_script, str(test_script)], self.env(tmp_path)
 
         try:
-            process = Popen(invoke, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-            raw_, _ = process.communicate(timeout=60)
-        except subprocess.TimeoutExpired as exc:
+            process = Popen(invoke, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+            raw_, _ = process.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
             process.kill()
-            remaining, _ = process.communicate(timeout=5)
-            partial = (exc.stdout or b"") + (remaining or b"")
-            pytest.fail(
-                f"Activation script timed out:\nPartial output:\n{partial.decode(errors='replace')}\nCommand: {invoke}"
-            )
+            process.communicate()
+            pytest.fail(f"Activation script timed out: {invoke}")
         except subprocess.CalledProcessError as exception:
             output = exception.output + exception.stderr
             assert not exception.returncode, output  # noqa: PT017
@@ -107,7 +103,7 @@ class ActivationTester:
         env["PYTHONIOENCODING"] = "utf-8"
         env["PATH"] = os.pathsep.join([dirname(sys.executable), *env.get("PATH", "").split(os.pathsep)])
         # clear up some environment variables so they don't affect the tests
-        for key in [k for k in env if k.startswith(("_OLD", "VIRTUALENV_", "COVERAGE_"))]:
+        for key in [k for k in env if k.startswith(("_OLD", "VIRTUALENV_"))]:
             del env[key]
         return env
 
@@ -120,7 +116,7 @@ class ActivationTester:
         return test_script
 
     def _get_test_lines(self, activate_script):
-        steps = [
+        return [
             self.print_python_exe(),
             self.print_os_env_var("VIRTUAL_ENV"),
             self.print_os_env_var("VIRTUAL_ENV_PROMPT"),
@@ -137,17 +133,9 @@ class ActivationTester:
             self.print_os_env_var("VIRTUAL_ENV_PROMPT"),
             "",  # just finish with an empty new line
         ]
-        result = []
-        for index, step in enumerate(steps):
-            result.extend((self.print_marker(index), step))
-        return result
 
-    def print_marker(self, step) -> str:
-        return f'echo "__STEP_{step}__"'
-
-    def assert_output(self, out, raw, tmp_path) -> None:
+    def assert_output(self, out, raw, tmp_path):
         """Compare _get_test_lines() with the expected values."""
-        out = [line for line in out if not line.strip('"').startswith("__STEP_")]
         assert out[0], raw
         assert out[1] == "None", raw
         assert out[2] == "None", raw
@@ -172,7 +160,7 @@ class ActivationTester:
     def quote(self, s):
         return self.of_class.quote(s)
 
-    def python_cmd(self, cmd) -> str:
+    def python_cmd(self, cmd):
         return f"{os.path.basename(sys.executable)} -c {self.quote(cmd)}"
 
     def print_python_exe(self):
@@ -225,12 +213,11 @@ class RaiseOnNonSourceCall(ActivationTester):
         env, activate_script = super().__call__(monkeypatch, tmp_path)
         process = Popen(
             self.non_source_activate(activate_script),
-            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env,
         )
-        _out, err_ = process.communicate(timeout=60)
+        _out, err_ = process.communicate()
         err = err_.decode("utf-8")
         assert process.returncode
         assert self.non_source_fail_message in err

@@ -9,7 +9,6 @@ import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 from textwrap import dedent
-from typing import TYPE_CHECKING
 
 from virtualenv.create.via_global_ref.builtin.ref import (
     ExePathRefToDest,
@@ -21,23 +20,15 @@ from virtualenv.create.via_global_ref.builtin.via_global_self_do import BuiltinV
 from .common import CPython, CPythonPosix, is_mac_os_framework, is_macos_brew
 from .cpython3 import CPython3
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
-    from io import BufferedRandom
-
-    from python_discovery import PythonInfo
-
-    from virtualenv.create.via_global_ref.builtin.ref import PathRef
-
 LOGGER = logging.getLogger(__name__)
 
 
 class CPythonmacOsFramework(CPython, ABC):
     @classmethod
-    def can_describe(cls, interpreter: PythonInfo) -> bool:
+    def can_describe(cls, interpreter):
         return is_mac_os_framework(interpreter) and super().can_describe(interpreter)
 
-    def create(self) -> None:
+    def create(self):
         super().create()
 
         target = self.desired_mach_o_image_path()
@@ -48,47 +39,47 @@ class CPythonmacOsFramework(CPython, ABC):
                 if not self.symlinks:
                     exes.extend(self.bin_dir / a for a in src.aliases)
                 for exe in exes:
-                    fix_mach_o(str(exe), current, target, self.interpreter.max_size)  # ty: ignore[invalid-argument-type]
+                    fix_mach_o(str(exe), current, target, self.interpreter.max_size)
                     try:
                         subprocess.check_call(["codesign", "--force", "--sign", "-", str(exe)])  # noqa: S607
                     except (OSError, subprocess.CalledProcessError) as e:
                         LOGGER.warning("Could not ad-hoc re-sign %s: %s", exe, e)
 
     @classmethod
-    def _executables(cls, interpreter: PythonInfo) -> Generator[tuple[Path, list[str], str, str]]:
+    def _executables(cls, interpreter):
         for _, targets, must, when in super()._executables(interpreter):
             # Make sure we use the embedded interpreter inside the framework, even if sys.executable points to the
             # stub executable in ${sys.prefix}/bin.
             # See http://groups.google.com/group/python-virtualenv/browse_thread/thread/17cab2f85da75951
-            fixed_host_exe = Path(interpreter.prefix) / "Resources" / "Python.app" / "Contents" / "MacOS" / "Python"  # ty: ignore[invalid-argument-type]
+            fixed_host_exe = Path(interpreter.prefix) / "Resources" / "Python.app" / "Contents" / "MacOS" / "Python"
             yield fixed_host_exe, targets, must, when
 
     @abstractmethod
-    def current_mach_o_image_path(self) -> str:
+    def current_mach_o_image_path(self):
         raise NotImplementedError
 
     @abstractmethod
-    def desired_mach_o_image_path(self) -> str:
+    def desired_mach_o_image_path(self):
         raise NotImplementedError
 
 
 class CPython3macOsFramework(CPythonmacOsFramework, CPython3, CPythonPosix):
-    def current_mach_o_image_path(self) -> str:
+    def current_mach_o_image_path(self):
         return "@executable_path/../../../../Python3"
 
-    def desired_mach_o_image_path(self) -> str:
+    def desired_mach_o_image_path(self):
         return "@executable_path/../.Python"
 
     @classmethod
-    def sources(cls, interpreter: PythonInfo) -> Generator[PathRef]:  # ty: ignore[invalid-method-override]
+    def sources(cls, interpreter):
         yield from super().sources(interpreter)
 
         # add a symlink to the host python image
-        exe = Path(interpreter.prefix) / "Python3"  # ty: ignore[invalid-argument-type]
+        exe = Path(interpreter.prefix) / "Python3"
         yield PathRefToDest(exe, dest=lambda self, _: self.dest / ".Python", must=RefMust.SYMLINK)
 
     @property
-    def reload_code(self) -> str:
+    def reload_code(self):
         result = super().reload_code  # ty: ignore[unresolved-attribute]
         return dedent(
             f"""
@@ -104,7 +95,7 @@ class CPython3macOsFramework(CPythonmacOsFramework, CPython3, CPythonPosix):
         )
 
 
-def fix_mach_o(exe: str, current: str, new: str, max_size: int) -> None:
+def fix_mach_o(exe, current, new, max_size):
     """https://en.wikipedia.org/wiki/Mach-O.
 
     Mach-O, short for Mach object file format, is a file format for executables, object code, shared libraries,
@@ -141,7 +132,7 @@ def fix_mach_o(exe: str, current: str, new: str, max_size: int) -> None:
             raise
 
 
-def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # noqa: C901
+def _builtin_change_mach_o(maxint):  # noqa: C901
     MH_MAGIC = 0xFEEDFACE  # noqa: N806
     MH_CIGAM = 0xCEFAEDFE  # noqa: N806
     MH_MAGIC_64 = 0xFEEDFACF  # noqa: N806
@@ -154,7 +145,7 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
     class FileView:
         """A proxy for file-like objects that exposes a given view of a file. Modified from macholib."""
 
-        def __init__(self, file_obj: FileView | BufferedRandom, start: int = 0, size: int = maxint) -> None:
+        def __init__(self, file_obj, start=0, size=maxint) -> None:
             if isinstance(file_obj, FileView):
                 self._file_obj = file_obj._file_obj  # noqa: SLF001
             else:
@@ -166,15 +157,15 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
         def __repr__(self) -> str:
             return f"<fileview [{self._start:d}, {self._end:d}] {self._file_obj!r}>"
 
-        def tell(self) -> int:
+        def tell(self):
             return self._pos
 
-        def _checkwindow(self, seek_to: int, op: str) -> None:
+        def _checkwindow(self, seek_to, op):
             if not (self._start <= seek_to <= self._end):
                 msg = f"{op} to offset {seek_to:d} is outside window [{self._start:d}, {self._end:d}]"
                 raise OSError(msg)
 
-        def seek(self, offset: int, whence: int = 0) -> None:
+        def seek(self, offset, whence=0):
             seek_to = offset
             if whence == os.SEEK_SET:
                 seek_to += self._start
@@ -189,7 +180,7 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
             self._file_obj.seek(seek_to)
             self._pos = seek_to - self._start
 
-        def write(self, content: bytes) -> None:
+        def write(self, content):
             here = self._start + self._pos
             self._checkwindow(here, "write")
             self._checkwindow(here + len(content), "write")
@@ -197,7 +188,7 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
             self._file_obj.write(content)
             self._pos += len(content)
 
-        def read(self, size: int = maxint) -> bytes:
+        def read(self, size=maxint):
             assert size >= 0  # noqa: S101
             here = self._start + self._pos
             self._checkwindow(here, "read")
@@ -207,19 +198,19 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
             self._pos += len(read_bytes)
             return read_bytes
 
-    def read_data(file: FileView, endian: str, num: int = 1) -> int | tuple[int, ...]:
+    def read_data(file, endian, num=1):
         """Read a given number of 32-bits unsigned integers from the given file with the given endianness."""
         res = struct.unpack(endian + "L" * num, file.read(num * 4))
         if len(res) == 1:
             return res[0]
         return res
 
-    def mach_o_change(at_path: str, what: str, value: str) -> None:  # noqa: C901
+    def mach_o_change(at_path, what, value):  # noqa: C901
         """Replace a given name (what) in any LC_LOAD_DYLIB command found in the given binary with a new name (value), provided it's shorter."""
 
-        def do_macho(file: FileView, bits: int, endian: str) -> None:
+        def do_macho(file, bits, endian):
             # Read Mach-O header (the magic number is assumed read by the caller)
-            _cpu_type, _cpu_sub_type, _file_type, n_commands, _size_of_commands, _flags = read_data(file, endian, 6)  # ty: ignore[not-iterable]
+            _cpu_type, _cpu_sub_type, _file_type, n_commands, _size_of_commands, _flags = read_data(file, endian, 6)
             # 64-bits header has one more field.
             if bits == 64:  # noqa: PLR2004
                 read_data(file, endian)
@@ -227,32 +218,32 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
             for _ in range(n_commands):
                 where = file.tell()
                 # Read command header
-                cmd, cmd_size = read_data(file, endian, 2)  # ty: ignore[not-iterable]
+                cmd, cmd_size = read_data(file, endian, 2)
                 if cmd == LC_LOAD_DYLIB:
                     # The first data field in LC_LOAD_DYLIB commands is the offset of the name, starting from the
                     # beginning of the  command.
                     name_offset = read_data(file, endian)
-                    file.seek(where + name_offset, os.SEEK_SET)  # ty: ignore[unsupported-operator]
+                    file.seek(where + name_offset, os.SEEK_SET)
                     # Read the NUL terminated string
-                    load = file.read(cmd_size - name_offset).decode()  # ty: ignore[unsupported-operator]
+                    load = file.read(cmd_size - name_offset).decode()
                     load = load[: load.index("\0")]
                     # If the string is what is being replaced, overwrite it.
                     if load == what:
-                        file.seek(where + name_offset, os.SEEK_SET)  # ty: ignore[unsupported-operator]
+                        file.seek(where + name_offset, os.SEEK_SET)
                         file.write(value.encode() + b"\0")
                 # Seek to the next command
                 file.seek(where + cmd_size, os.SEEK_SET)
 
-        def do_file(file: FileView | BufferedRandom, offset: int = 0, size: int = maxint) -> None:
+        def do_file(file, offset=0, size=maxint):
             file = FileView(file, offset, size)
             # Read magic number
             magic = read_data(file, BIG_ENDIAN)
             if magic == FAT_MAGIC:
                 # Fat binaries contain nfat_arch Mach-O binaries
                 n_fat_arch = read_data(file, BIG_ENDIAN)
-                for _ in range(n_fat_arch):  # ty: ignore[invalid-argument-type]
+                for _ in range(n_fat_arch):
                     # Read arch header
-                    _cpu_type, _cpu_sub_type, offset, size, _align = read_data(file, BIG_ENDIAN, 5)  # ty: ignore[not-iterable]
+                    _cpu_type, _cpu_sub_type, offset, size, _align = read_data(file, BIG_ENDIAN, 5)
                     do_file(file, offset, size)
             elif magic == MH_MAGIC:
                 do_macho(file, 32, BIG_ENDIAN)
@@ -273,11 +264,11 @@ def _builtin_change_mach_o(maxint: int) -> Callable[[str, str, str], None]:  # n
 
 class CPython3macOsBrew(CPython3, CPythonPosix):
     @classmethod
-    def can_describe(cls, interpreter: PythonInfo) -> bool:
+    def can_describe(cls, interpreter):
         return is_macos_brew(interpreter) and super().can_describe(interpreter)
 
     @classmethod
-    def setup_meta(cls, interpreter: PythonInfo) -> BuiltinViaGlobalRefMeta:  # noqa: ARG003
+    def setup_meta(cls, interpreter):  # noqa: ARG003
         meta = BuiltinViaGlobalRefMeta()
         meta.copy_error = "Brew disables copy creation: https://github.com/Homebrew/homebrew-core/issues/138159"
         return meta

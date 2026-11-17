@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from .base import PluginLoader
-
-if TYPE_CHECKING:
-    from virtualenv.config.cli.parser import VirtualEnvConfigParser
-    from virtualenv.discovery.discover import Discover
 
 
 class Discovery(PluginLoader):
     """Discovery plugins."""
 
 
-def get_discover(parser: VirtualEnvConfigParser, args: list[str] | None) -> Discover:
+def get_discover(parser, args):
     discover_types = Discovery.entry_points_for("virtualenv.discovery")
     discovery_parser = parser.add_argument_group(
         title="discovery",
@@ -45,12 +39,12 @@ def get_discover(parser: VirtualEnvConfigParser, args: list[str] | None) -> Disc
         )
         raise RuntimeError(msg)
     discover_class = discover_types[discovery]
-    discover_class.add_parser_arguments(discovery_parser)  # ty: ignore[unresolved-attribute]
+    discover_class.add_parser_arguments(discovery_parser)
     options, _ = parser.parse_known_args(args, namespace=options)
     return discover_class(options)
 
 
-def _get_default_discovery(discover_types: dict[str, type]) -> list[str]:
+def _get_default_discovery(discover_types):
     return list(discover_types.keys())
 
 

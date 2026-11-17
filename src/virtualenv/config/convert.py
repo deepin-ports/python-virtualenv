@@ -2,24 +2,20 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, ClassVar
-
-if TYPE_CHECKING:
-    from argparse import Action
-    from typing import Any
+from typing import ClassVar
 
 LOGGER = logging.getLogger(__name__)
 
 
 class TypeData:
-    def __init__(self, default_type: type, as_type: type) -> None:
+    def __init__(self, default_type, as_type) -> None:
         self.default_type = default_type
         self.as_type = as_type
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(base={self.default_type}, as={self.as_type})"
 
-    def convert(self, value: str) -> Any:  # noqa: ANN401
+    def convert(self, value):
         return self.default_type(value)
 
 
@@ -35,7 +31,7 @@ class BoolType(TypeData):
         "off": False,
     }
 
-    def convert(self, value: str) -> bool:
+    def convert(self, value):
         if value.lower() not in self.BOOLEAN_STATES:
             msg = f"Not a boolean: {value}"
             raise ValueError(msg)
@@ -43,17 +39,17 @@ class BoolType(TypeData):
 
 
 class NoneType(TypeData):
-    def convert(self, value: str) -> str | None:
+    def convert(self, value):
         if not value:
             return None
         return str(value)
 
 
 class ListType(TypeData):
-    def _validate(self) -> None:
+    def _validate(self):
         """no op."""
 
-    def convert(self, value: str | list[str], flatten: bool = True) -> list[Any]:  # noqa: ARG002, FBT002
+    def convert(self, value, flatten=True):  # noqa: ARG002, FBT002
         values = self.split_values(value)
         result = []
         for a_value in values:
@@ -61,7 +57,7 @@ class ListType(TypeData):
             result.extend(sub_values)
         return [self.as_type(i) for i in result]
 
-    def split_values(self, value: str | bytes | list[str]) -> list[str]:
+    def split_values(self, value):
         """Split the provided value into a list.
 
         First this is done by newlines. If there were no newlines in the text, then we next try to split by comma.
@@ -73,15 +69,15 @@ class ListType(TypeData):
             # logic is supported here.
             values = value.splitlines()
             if len(values) <= 1:
-                values = value.split(",")  # ty: ignore[invalid-argument-type]
+                values = value.split(",")
             values = filter(None, [x.strip() for x in values])
         else:
             values = list(value)
 
-        return values  # ty: ignore[invalid-return-type]
+        return values
 
 
-def convert(value: str, as_type: TypeData, source: str) -> Any:  # noqa: ANN401
+def convert(value, as_type, source):
     """Convert the value as a given type where the value comes from the given source."""
     try:
         return as_type.convert(value)
@@ -93,10 +89,10 @@ def convert(value: str, as_type: TypeData, source: str) -> Any:  # noqa: ANN401
 _CONVERT = {bool: BoolType, type(None): NoneType, list: ListType}
 
 
-def get_type(action: Action) -> TypeData:
+def get_type(action):
     default_type = type(action.default)
     as_type = default_type if action.type is None else action.type
-    return _CONVERT.get(default_type, TypeData)(default_type, as_type)  # ty: ignore[invalid-argument-type]
+    return _CONVERT.get(default_type, TypeData)(default_type, as_type)
 
 
 __all__ = [

@@ -1,14 +1,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
 
 from .base import AppData, ContentStore
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-    from pathlib import Path
-    from typing import Any, NoReturn
 
 
 class AppDataDisabled(AppData):
@@ -22,53 +16,53 @@ class AppDataDisabled(AppData):
 
     error = RuntimeError("no app data folder available, probably no write access to the folder")
 
-    def close(self) -> None:
+    def close(self):
         """Do nothing."""
 
-    def reset(self) -> None:
+    def reset(self):
         """Do nothing."""
 
-    def py_info(self, path: Path) -> ContentStoreNA:  # noqa: ARG002
+    def py_info(self, path):  # noqa: ARG002
         return ContentStoreNA()
 
-    def embed_update_log(self, distribution: str, for_py_version: str) -> ContentStoreNA:  # noqa: ARG002
+    def embed_update_log(self, distribution, for_py_version):  # noqa: ARG002
         return ContentStoreNA()
 
-    def extract(self, path: Path, to_folder: Path | None) -> NoReturn:  # noqa: ARG002
+    def extract(self, path, to_folder):  # noqa: ARG002
         raise self.error
 
     @contextmanager
-    def locked(self, path: Path) -> Generator[None]:  # noqa: ARG002
+    def locked(self, path):  # noqa: ARG002
         """Do nothing."""
         yield
 
     @property
-    def house(self) -> NoReturn:
+    def house(self):
         raise self.error
 
-    def wheel_image(self, for_py_version: str, name: str) -> NoReturn:  # noqa: ARG002
+    def wheel_image(self, for_py_version, name):  # noqa: ARG002
         raise self.error
 
-    def py_info_clear(self) -> None:
+    def py_info_clear(self):
         """Nothing to clear."""
 
 
 class ContentStoreNA(ContentStore):
-    def exists(self) -> bool:
+    def exists(self):
         return False
 
-    def read(self) -> None:
+    def read(self):
         """Nothing to read."""
         return
 
-    def write(self, content: Any) -> None:  # noqa: ANN401
+    def write(self, content):
         """Nothing to write."""
 
-    def remove(self) -> None:
+    def remove(self):
         """Nothing to remove."""
 
     @contextmanager
-    def locked(self) -> Generator[None]:
+    def locked(self):
         yield
 
 

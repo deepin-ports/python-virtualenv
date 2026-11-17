@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import sys
 from argparse import Namespace
 
@@ -9,7 +8,7 @@ import pytest
 from virtualenv.activation import PowerShellActivator
 
 
-def test_powershell_pydoc_call_operator(tmp_path) -> None:
+def test_powershell_pydoc_call_operator(tmp_path):
     """Test that PowerShell pydoc function uses call operator to handle spaces in python path."""
 
     # GIVEN: A mock interpreter
@@ -19,7 +18,7 @@ def test_powershell_pydoc_call_operator(tmp_path) -> None:
         tk_lib = None
 
     class MockCreator:
-        def __init__(self, dest) -> None:
+        def __init__(self, dest):
             self.dest = dest
             self.bin_dir = dest / "Scripts"
             self.bin_dir.mkdir(parents=True)
@@ -50,7 +49,7 @@ def test_powershell_pydoc_call_operator(tmp_path) -> None:
         (None, None, False),
     ],
 )
-def test_powershell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> None:
+def test_powershell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present):
     # GIVEN
     class MockInterpreter:
         os = "nt"
@@ -60,7 +59,7 @@ def test_powershell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> No
     interpreter.tk_lib = tk_lib
 
     class MockCreator:
-        def __init__(self, dest) -> None:
+        def __init__(self, dest):
             self.dest = dest
             self.bin_dir = dest / "bin"
             self.bin_dir.mkdir()
@@ -97,12 +96,12 @@ def test_powershell_tkinter_generation(tmp_path, tcl_lib, tk_lib, present) -> No
 
 
 @pytest.mark.slow
-def test_powershell(activation_tester_class, activation_tester, monkeypatch) -> None:
+def test_powershell(activation_tester_class, activation_tester, monkeypatch):
     monkeypatch.setenv("TERM", "xterm")
 
     class PowerShell(activation_tester_class):
         def __init__(self, session) -> None:
-            cmd = "pwsh" if shutil.which("pwsh") else "powershell.exe" if sys.platform == "win32" else "pwsh"
+            cmd = "powershell.exe" if sys.platform == "win32" else "pwsh"
             super().__init__(PowerShellActivator, session, cmd, "activate.ps1", "ps1")
             self._version_cmd = [cmd, "-c", "$PSVersionTable"]
             self._invoke_script = [cmd, "-NonInteractive", "-NoProfile", "-ExecutionPolicy", "ByPass", "-File"]
@@ -115,10 +114,10 @@ def test_powershell(activation_tester_class, activation_tester, monkeypatch) -> 
         def invoke_script(self):
             return [self.cmd, "-File"]
 
-        def print_os_env_var(self, var) -> str:
+        def print_os_env_var(self, var):
             return f'if ($env:{var} -eq $null) {{ "None" }} else {{ $env:{var} }}'
 
-        def print_prompt(self) -> str:
+        def print_prompt(self):
             return "prompt"
 
         def quote(self, s):

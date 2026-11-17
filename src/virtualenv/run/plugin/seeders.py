@@ -1,24 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from .base import ComponentBuilder
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from python_discovery import PythonInfo
-
-    from virtualenv.config.cli.parser import VirtualEnvConfigParser, VirtualEnvOptions
-    from virtualenv.seed.seeder import Seeder
 
 
 class SeederSelector(ComponentBuilder):
-    def __init__(self, interpreter: PythonInfo, parser: VirtualEnvConfigParser) -> None:
+    def __init__(self, interpreter, parser) -> None:
         possible = self.options("virtualenv.seed")
         super().__init__(interpreter, parser, "seeder", possible)
 
-    def add_selector_arg_parse(self, name: str, choices: Sequence[str]) -> None:
+    def add_selector_arg_parse(self, name, choices):
         self.parser.add_argument(
             f"--{name}",
             choices=choices,
@@ -35,18 +25,15 @@ class SeederSelector(ComponentBuilder):
         )
 
     @staticmethod
-    def _get_default() -> str:
+    def _get_default():
         return "app-data"
 
-    def handle_selected_arg_parse(self, options: VirtualEnvOptions) -> str:
+    def handle_selected_arg_parse(self, options):
         return super().handle_selected_arg_parse(options)
 
-    def create(self, options: VirtualEnvOptions) -> Seeder:
+    def create(self, options):
         assert self._impl_class is not None  # noqa: S101  # Set by handle_selected_arg_parse
-        seeder = self._impl_class(options)
-        if seeder.enabled and (reason := seeder.cannot_seed(self.interpreter)) is not None:
-            raise RuntimeError(reason)
-        return seeder
+        return self._impl_class(options)
 
 
 __all__ = [

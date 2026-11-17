@@ -7,13 +7,6 @@ import zipfile
 from functools import cached_property
 from importlib.abc import SourceLoader
 from importlib.util import spec_from_file_location
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Iterator
-    from importlib.machinery import ModuleSpec
-    from types import ModuleType, TracebackType
-    from typing import Self
 
 ABS_HERE = os.path.abspath(os.path.dirname(__file__))
 
@@ -27,7 +20,7 @@ class VersionPlatformSelect:
         self.distributions = self._load("distributions.json")
         self.__cache = {}
 
-    def _load(self, of_file: str) -> dict[str, str]:
+    def _load(self, of_file):
         version = ".".join(str(i) for i in sys.version_info[0:2])
         per_version = json.loads(self.get_data(of_file).decode())
         all_platforms = per_version[version] if version in per_version else per_version["3.9"]
@@ -39,24 +32,22 @@ class VersionPlatformSelect:
         content.update(all_platforms.get(f"=={sys.platform}", {}))  # and finish it off with our platform
         return content
 
-    def __enter__(self) -> Self:
+    def __enter__(self):
         return self
 
-    def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
-    ) -> None:
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self._zip_file.close()
 
-    def find_mod(self, fullname: str) -> str | None:
+    def find_mod(self, fullname):
         if fullname in self.modules:
             return self.modules[fullname]
         return None
 
-    def get_filename(self, fullname: str) -> str | None:
+    def get_filename(self, fullname):
         zip_path = self.find_mod(fullname)
         return None if zip_path is None else os.path.join(ABS_HERE, zip_path)
 
-    def get_data(self, filename: str) -> bytes:
+    def get_data(self, filename):
         if filename.startswith(ABS_HERE):
             # keep paths relative from the zipfile
             filename = filename[len(ABS_HERE) + 1 :]
@@ -67,18 +58,17 @@ class VersionPlatformSelect:
         with self._zip_file.open(filename) as file_handler:
             return file_handler.read()
 
-    def find_distributions(self, context: Any) -> Iterator[Any]:  # noqa: ANN401
+    def find_distributions(self, context):
         dist_class = versioned_distribution_class()
-        if context.name is None:
-            return
-        name = context.name.replace("_", "-")
+        name = context.name
         if name in self.distributions:
-            yield dist_class(file_loader=self.get_data, dist_path=self.distributions[name])
+            result = dist_class(file_loader=self.get_data, dist_path=self.distributions[name])
+            yield result
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(path={ABS_HERE})"
 
-    def _register_distutils_finder(self) -> None:  # noqa: C901
+    def _register_distutils_finder(self):  # noqa: C901
         if "distlib" not in self.modules:
             return
 
@@ -112,14 +102,14 @@ class VersionPlatformSelect:
                 ]
 
         class DistlibFinder:
-            def __init__(self, path: str, loader: Any) -> None:  # noqa: ANN401
+            def __init__(self, path, loader) -> None:
                 self.path = path
                 self.loader = loader
 
-            def find(self, name: str) -> Any:  # noqa: ANN401
+            def find(self, name):
                 return Resource(self.path, name, self.loader)
 
-            def iterator(self, resource_name: str) -> Iterator[Any]:
+            def iterator(self, resource_name):
                 resource = self.find(resource_name)
                 if resource is not None:
                     todo = [resource]
@@ -144,20 +134,20 @@ class VersionPlatformSelect:
 _VER_DISTRIBUTION_CLASS = None
 
 
-def versioned_distribution_class() -> type:
+def versioned_distribution_class():
     global _VER_DISTRIBUTION_CLASS  # noqa: PLW0603
     if _VER_DISTRIBUTION_CLASS is None:
         from importlib.metadata import Distribution  # noqa: PLC0415
 
         class VersionedDistribution(Distribution):
-            def __init__(self, file_loader: Any, dist_path: str) -> None:  # noqa: ANN401
+            def __init__(self, file_loader, dist_path) -> None:
                 self.file_loader = file_loader
                 self.dist_path = dist_path
 
-            def read_text(self, filename: str) -> str:
+            def read_text(self, filename):
                 return self.file_loader(self.locate_file(filename)).decode("utf-8")
 
-            def locate_file(self, path: str) -> str:
+            def locate_file(self, path):
                 return os.path.join(self.dist_path, path)
 
         _VER_DISTRIBUTION_CLASS = VersionedDistribution
@@ -165,17 +155,17 @@ def versioned_distribution_class() -> type:
 
 
 class VersionedFindLoad(VersionPlatformSelect, SourceLoader):
-    def find_spec(self, fullname: str, path: Any, target: ModuleType | None = None) -> ModuleSpec | None:  # noqa: ARG002, ANN401
+    def find_spec(self, fullname, path, target=None):  # noqa: ARG002
         zip_path = self.find_mod(fullname)
         if zip_path is not None:
             return spec_from_file_location(name=fullname, loader=self)
         return None
 
-    def module_repr(self, module: ModuleType) -> str:
+    def module_repr(self, module):
         raise NotImplementedError
 
 
-def run() -> None:
+def run():
     with VersionedFindLoad() as finder:
         sys.meta_path.insert(0, finder)
         finder._register_distutils_finder()  # noqa: SLF001

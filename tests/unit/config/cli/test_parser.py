@@ -24,15 +24,13 @@ def gen_parser_no_conf_env(monkeypatch, tmp_path):
         def _run(*args):
             return parser.parse_args(args=args)
 
-        try:
-            yield parser, _run
-        finally:
-            parser.enable_help()
+        yield parser, _run
+        parser.enable_help()
 
     return _build
 
 
-def test_flag(gen_parser_no_conf_env) -> None:
+def test_flag(gen_parser_no_conf_env):
     with gen_parser_no_conf_env() as (parser, run):
         parser.add_argument("--clear", dest="clear", action="store_true", help="it", default=False)
     result = run()
@@ -41,14 +39,14 @@ def test_flag(gen_parser_no_conf_env) -> None:
     assert result.clear is True
 
 
-def test_reset_app_data_does_not_conflict_clear() -> None:
+def test_reset_app_data_does_not_conflict_clear():
     options = VirtualEnvOptions()
     session_via_cli(["--clear", "venv"], options=options)
     assert options.clear is True
     assert options.reset_app_data is False
 
 
-def test_builtin_discovery_class_preferred(mocker) -> None:
+def test_builtin_discovery_class_preferred(mocker):
     mocker.patch(
         "virtualenv.run.plugin.discovery._get_default_discovery",
         return_value=["pluginA", "pluginX", "builtin", "Aplugin", "Xplugin"],
